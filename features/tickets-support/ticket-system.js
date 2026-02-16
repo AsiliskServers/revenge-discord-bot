@@ -31,8 +31,12 @@ const RUNTIME_DIR = path.join(__dirname, ".runtime");
 const HUB_STATE_FILE = path.join(RUNTIME_DIR, "ticket-hub-message.json");
 const TICKETS_STATE_FILE = path.join(RUNTIME_DIR, "tickets-state.json");
 
-const HUB_IMAGE_FILE = path.join(__dirname, "image.png");
-const HUB_IMAGE_ATTACHMENT_NAME = "ticket-banner.png";
+const HUB_IMAGE_FILES = [
+  path.join(__dirname, "image.png"),
+  path.join(__dirname, "ticket-image.png"),
+  path.join(__dirname, "banner.png"),
+  path.join(__dirname, "..", "message-bienvenue", "image.png"),
+];
 
 const TICKET_REASONS = [
   {
@@ -70,6 +74,20 @@ const TICKET_REASONS = [
 const reasonByValue = new Map(TICKET_REASONS.map((reason) => [reason.value, reason]));
 const ticketStore = new Map();
 let missingImageWarned = false;
+let selectedImageWarned = false;
+
+function resolveHubImageFile() {
+  for (const candidate of HUB_IMAGE_FILES) {
+    if (fs.existsSync(candidate)) {
+      if (!selectedImageWarned) {
+        selectedImageWarned = true;
+        console.log(`[TICKET] Image panel utilisee: ${candidate}`);
+      }
+      return candidate;
+    }
+  }
+  return null;
+}
 
 function toTicketRecord(raw) {
   if (!raw || !raw.channelId || !raw.guildId || !raw.ownerId) {
@@ -147,18 +165,20 @@ function buildHubPayload() {
     allowedMentions: { parse: [] },
   };
 
-  if (fs.existsSync(HUB_IMAGE_FILE)) {
-    embed.setImage(`attachment://${HUB_IMAGE_ATTACHMENT_NAME}`);
+  const imagePath = resolveHubImageFile();
+  if (imagePath) {
+    const attachmentName = path.basename(imagePath);
+    embed.setImage(`attachment://${attachmentName}`);
     payload.files = [
       {
-        attachment: HUB_IMAGE_FILE,
-        name: HUB_IMAGE_ATTACHMENT_NAME,
+        attachment: imagePath,
+        name: attachmentName,
       },
     ];
   } else if (!missingImageWarned) {
     missingImageWarned = true;
     console.warn(
-      `[TICKET] Image introuvable: ${HUB_IMAGE_FILE}. L'embed support sera envoye sans image.`
+      `[TICKET] Image introuvable. Ajoute un fichier image dans: ${path.join(__dirname, "image.png")}`
     );
   }
 
