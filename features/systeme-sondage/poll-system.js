@@ -147,7 +147,7 @@ function buildHubPayload() {
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(CREATE_POLL_BUTTON_ID)
-          .setStyle(ButtonStyle.Primary)
+          .setStyle(ButtonStyle.Danger)
           .setLabel("Creer une suggestion")
       ),
     ],
