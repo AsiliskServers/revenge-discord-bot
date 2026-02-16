@@ -226,25 +226,25 @@ function buildTicketButtons(ticket) {
     new ButtonBuilder()
       .setCustomId(TICKET_BUTTON_CLAIM_ID)
       .setStyle(ButtonStyle.Primary)
-      .setEmoji("🔵")
+      .setEmoji("🎟️")
       .setLabel("Claim")
       .setDisabled(Boolean(ticket.claimedById)),
     new ButtonBuilder()
       .setCustomId(TICKET_BUTTON_CLOSE_ID)
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji("⚪")
+      .setEmoji("🔒")
       .setLabel("Close")
       .setDisabled(ticket.status === "closed"),
     new ButtonBuilder()
       .setCustomId(TICKET_BUTTON_REOPEN_ID)
       .setStyle(ButtonStyle.Success)
-      .setEmoji("🟢")
+      .setEmoji("🔓")
       .setLabel("Reopen")
       .setDisabled(ticket.status !== "closed"),
     new ButtonBuilder()
       .setCustomId(TICKET_BUTTON_DELETE_ID)
       .setStyle(ButtonStyle.Danger)
-      .setEmoji("🔴")
+      .setEmoji("🗑️")
       .setLabel("Delete")
   );
 }
