@@ -147,6 +147,13 @@ async function ensureYtDlpWrap() {
         process.platform
       );
     }
+    if (process.platform !== "win32") {
+      try {
+        fs.chmodSync(YTDLP_BIN_PATH, 0o755);
+      } catch {
+        // ignored
+      }
+    }
 
     const local = new YTDlpWrap(YTDLP_BIN_PATH);
     await local.getVersion();
