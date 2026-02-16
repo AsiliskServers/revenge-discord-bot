@@ -30,6 +30,7 @@ const TICKET_BUTTON_DELETE_ID = "ticket_delete";
 const RUNTIME_DIR = path.join(__dirname, ".runtime");
 const HUB_STATE_FILE = path.join(RUNTIME_DIR, "ticket-hub-message.json");
 const TICKETS_STATE_FILE = path.join(RUNTIME_DIR, "tickets-state.json");
+const TICKETS_META_FILE = path.join(RUNTIME_DIR, "tickets-meta.json");
 
 const HUB_IMAGE_FILES = [
   path.join(__dirname, "image.png"),
@@ -73,6 +74,9 @@ const TICKET_REASONS = [
 
 const reasonByValue = new Map(TICKET_REASONS.map((reason) => [reason.value, reason]));
 const ticketStore = new Map();
+const ticketMeta = {
+  totalCreated: 0,
+};
 let missingImageWarned = false;
 let selectedImageWarned = false;
 
@@ -98,6 +102,7 @@ function toTicketRecord(raw) {
     channelId: String(raw.channelId),
     guildId: String(raw.guildId),
     ownerId: String(raw.ownerId),
+    ticketNumber: Number(raw.ticketNumber || 0),
     reasonValue: String(raw.reasonValue || "autres"),
     reasonLabel: String(raw.reasonLabel || "Autres"),
     claimedById: raw.claimedById ? String(raw.claimedById) : null,
@@ -109,17 +114,39 @@ function toTicketRecord(raw) {
 
 function loadTicketStore() {
   ticketStore.clear();
+  let maxTicketNumber = 0;
   const raw = readJsonFile(TICKETS_STATE_FILE, []);
   for (const item of raw) {
     const ticket = toTicketRecord(item);
     if (ticket) {
       ticketStore.set(ticket.channelId, ticket);
+      maxTicketNumber = Math.max(maxTicketNumber, ticket.ticketNumber || 0);
     }
   }
+  return maxTicketNumber;
 }
 
 function saveTicketStore() {
   writeJsonFile(TICKETS_STATE_FILE, Array.from(ticketStore.values()));
+}
+
+function loadTicketMeta(maxTicketNumberFromStore) {
+  const raw = readJsonFile(TICKETS_META_FILE, { totalCreated: 0 });
+  const parsed = Number(raw?.totalCreated || 0);
+  ticketMeta.totalCreated = Math.max(
+    Number.isFinite(parsed) ? parsed : 0,
+    Number(maxTicketNumberFromStore || 0)
+  );
+}
+
+function saveTicketMeta() {
+  writeJsonFile(TICKETS_META_FILE, ticketMeta);
+}
+
+function nextTicketNumber() {
+  ticketMeta.totalCreated += 1;
+  saveTicketMeta();
+  return ticketMeta.totalCreated;
 }
 
 async function getSupportChannel(client) {
@@ -269,6 +296,22 @@ function sanitizeName(value) {
     .slice(0, 40);
 
   return safe || "ticket";
+}
+
+function buildTicketChannelName(displayName, reasonLabel, ticketNumber) {
+  const suffix = `-${ticketNumber}`;
+  const userPart = sanitizeName(displayName).slice(0, 45) || "membre";
+  const reasonPart = sanitizeName(reasonLabel).slice(0, 35) || "autres";
+
+  let channelName = `${userPart}-${reasonPart}${suffix}`;
+  if (channelName.length <= 100) {
+    return channelName;
+  }
+
+  const maxUserLen = Math.max(5, 100 - (reasonPart.length + suffix.length + 1));
+  const trimmedUserPart = userPart.slice(0, maxUserLen);
+  channelName = `${trimmedUserPart}-${reasonPart}${suffix}`;
+  return channelName.slice(0, 100).replace(/-+$/g, "");
 }
 
 async function resolveStaffRoleIds(guild) {
@@ -515,7 +558,13 @@ async function createTicketFromSelect(interaction) {
 
   try {
     const guild = interaction.guild;
-    const channelName = `ticket-${sanitizeName(reason.value)}-${interaction.user.id.slice(-4)}`;
+    const memberDisplayName = interaction.member?.displayName || interaction.user.username;
+    const ticketNumber = nextTicketNumber();
+    const channelName = buildTicketChannelName(
+      memberDisplayName,
+      reason.label,
+      ticketNumber
+    );
 
     const permissionOverwrites = await buildTicketPermissionOverwrites(
       guild,
@@ -526,7 +575,7 @@ async function createTicketFromSelect(interaction) {
       name: channelName,
       type: ChannelType.GuildText,
       parent: SUPPORT_TICKET_CATEGORY_ID,
-      topic: `Ticket ${reason.label} | ${interaction.user.tag} (${interaction.user.id})`,
+      topic: `Ticket #${ticketNumber} ${reason.label} | ${interaction.user.tag} (${interaction.user.id})`,
       permissionOverwrites,
       reason: `Ticket ouvert par ${interaction.user.tag} (${reason.label})`,
     });
@@ -535,6 +584,7 @@ async function createTicketFromSelect(interaction) {
       channelId: ticketChannel.id,
       guildId: guild.id,
       ownerId: interaction.user.id,
+      ticketNumber,
       reasonValue: reason.value,
       reasonLabel: `${reason.emoji} ${reason.label}`,
       claimedById: null,
@@ -692,7 +742,8 @@ async function handleTicketButton(interaction) {
 module.exports = {
   name: "feature:ticket-system",
   async init(client) {
-    loadTicketStore();
+    const maxTicketNumberFromStore = loadTicketStore();
+    loadTicketMeta(maxTicketNumberFromStore);
 
     client.once("clientReady", async () => {
       if (!hasConfiguredGuildId(client)) {

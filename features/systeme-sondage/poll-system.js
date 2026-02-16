@@ -132,17 +132,30 @@ async function getPollChannel(client) {
   return channel;
 }
 
-function buildHubPayload() {
+function buildHubPayload(client) {
+  const botAvatarUrl =
+    typeof client?.user?.displayAvatarURL === "function"
+      ? client.user.displayAvatarURL()
+      : null;
+
+  const embed = new EmbedBuilder()
+    .setColor(0xe11d48)
+    .setDescription(
+      "Pour poster une nouvelle suggestion, réagissez avec le bouton de ce message. 📥\n\n" +
+        "⚠️ Vous êtes limité à deux suggestions par personne tant que la décision de la suggestion n'est pas prise."
+    );
+
+  if (botAvatarUrl) {
+    embed.setAuthor({
+      name: "Nouvelle suggestion",
+      iconURL: botAvatarUrl,
+    });
+  } else {
+    embed.setTitle("Nouvelle suggestion");
+  }
+
   return {
-    embeds: [
-      new EmbedBuilder()
-        .setColor(0xe11d48)
-        .setTitle("REVENGE | Suggestions")
-        .setDescription(
-          "Utilise le bouton ci-dessous pour creer une suggestion.\n\n" +
-            "Le bot creera automatiquement l'espace de discussion de la suggestion, un message de suivi et les votes Pour / Contre."
-        ),
-    ],
+    embeds: [embed],
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -309,7 +322,7 @@ async function ensureHubMessage(client) {
     return null;
   }
 
-  const payload = buildHubPayload();
+  const payload = buildHubPayload(client);
   const state = readJsonFile(HUB_STATE_FILE, null);
 
   if (
@@ -371,7 +384,7 @@ async function bumpHubMessageToBottom(client, channel) {
     await existing.delete().catch(() => null);
   }
 
-  const sent = await targetChannel.send(buildHubPayload());
+  const sent = await targetChannel.send(buildHubPayload(client));
   writeJsonFile(HUB_STATE_FILE, {
     guildId: targetChannel.guild.id,
     channelId: targetChannel.id,
