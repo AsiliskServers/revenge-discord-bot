@@ -151,7 +151,7 @@ function buildHubPayload() {
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(OPEN_TICKET_SELECT_ID)
-          .setPlaceholder(":envelope_with_arrow: | Veuillez sélectionner la raison de votre ticket")
+          .setPlaceholder("📩 | Veuillez sélectionner la raison de votre ticket")
           .addOptions(
             TICKET_REASONS.map((reason) => ({
               label: reason.label,
