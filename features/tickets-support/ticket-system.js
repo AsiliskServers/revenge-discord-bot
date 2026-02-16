@@ -20,11 +20,11 @@ const {
 } = require("../_shared/common");
 
 const SUPPORT_CHANNEL_ID = "996446504199917668";
+const SUPPORT_TICKET_CATEGORY_ID = "1383247332908335207";
 
 const OPEN_TICKET_SELECT_ID = "ticket_open_select";
 const TICKET_BUTTON_CLAIM_ID = "ticket_claim";
 const TICKET_BUTTON_CLOSE_ID = "ticket_close";
-const TICKET_BUTTON_REOPEN_ID = "ticket_reopen";
 const TICKET_BUTTON_DELETE_ID = "ticket_delete";
 
 const RUNTIME_DIR = path.join(__dirname, ".runtime");
@@ -151,7 +151,7 @@ function buildHubPayload() {
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(OPEN_TICKET_SELECT_ID)
-          .setPlaceholder("Choisis la raison de ton ticket")
+          .setPlaceholder(":envelope_with_arrow: | Veuillez sélectionner la raison de votre ticket")
           .addOptions(
             TICKET_REASONS.map((reason) => ({
               label: reason.label,
@@ -193,7 +193,7 @@ function buildTicketEmbed(ticket) {
     .setColor(0xe11d48)
     .setTitle("🎫 Ticket Support")
     .setDescription(
-      "Ton ticket a été créé. :discord_cloche:\n" +
+      "Ton ticket a été créé. 🔔\n" +
         "Fournis nous toute information supplémentaire que tu juges utile qui pourrait nous aider à résoudre et répondre le plus rapidement."
     )
     .addFields(
@@ -235,12 +235,6 @@ function buildTicketButtons(ticket) {
       .setEmoji("🔒")
       .setLabel("Close")
       .setDisabled(ticket.status === "closed"),
-    new ButtonBuilder()
-      .setCustomId(TICKET_BUTTON_REOPEN_ID)
-      .setStyle(ButtonStyle.Success)
-      .setEmoji("🔓")
-      .setLabel("Reopen")
-      .setDisabled(ticket.status !== "closed"),
     new ButtonBuilder()
       .setCustomId(TICKET_BUTTON_DELETE_ID)
       .setStyle(ButtonStyle.Danger)
@@ -521,7 +515,6 @@ async function createTicketFromSelect(interaction) {
 
   try {
     const guild = interaction.guild;
-    const supportChannel = interaction.channel;
     const channelName = `ticket-${sanitizeName(reason.value)}-${interaction.user.id.slice(-4)}`;
 
     const permissionOverwrites = await buildTicketPermissionOverwrites(
@@ -532,7 +525,7 @@ async function createTicketFromSelect(interaction) {
     const ticketChannel = await guild.channels.create({
       name: channelName,
       type: ChannelType.GuildText,
-      parent: supportChannel.parentId || undefined,
+      parent: SUPPORT_TICKET_CATEGORY_ID,
       topic: `Ticket ${reason.label} | ${interaction.user.tag} (${interaction.user.id})`,
       permissionOverwrites,
       reason: `Ticket ouvert par ${interaction.user.tag} (${reason.label})`,
@@ -649,42 +642,6 @@ async function handleClose(interaction, ticket) {
   });
 }
 
-async function handleReopen(interaction, ticket) {
-  if (!isTicketStaff(interaction)) {
-    await interaction.reply({
-      content: "Seul un staff peut reouvrir ce ticket.",
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  if (ticket.status !== "closed") {
-    await interaction.reply({
-      content: "Ce ticket est deja ouvert.",
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  ticket.status = "open";
-  saveTicketStore();
-
-  await setOwnerSendPermission(
-    interaction.channel,
-    ticket.ownerId,
-    true,
-    `Ticket reouvert par ${interaction.user.tag}`
-  );
-
-  await interaction.deferUpdate();
-  await updateTicketPanelMessage(interaction.client, ticket);
-
-  await interaction.followUp({
-    content: `Ticket reouvert par <@${interaction.user.id}>.`,
-    allowedMentions: { users: [interaction.user.id], parse: [] },
-  });
-}
-
 async function handleDelete(interaction, ticket) {
   if (!isTicketStaff(interaction)) {
     await interaction.reply({
@@ -727,11 +684,6 @@ async function handleTicketButton(interaction) {
     return;
   }
 
-  if (interaction.customId === TICKET_BUTTON_REOPEN_ID) {
-    await handleReopen(interaction, ticket);
-    return;
-  }
-
   if (interaction.customId === TICKET_BUTTON_DELETE_ID) {
     await handleDelete(interaction, ticket);
   }
@@ -766,7 +718,6 @@ module.exports = {
         [
           TICKET_BUTTON_CLAIM_ID,
           TICKET_BUTTON_CLOSE_ID,
-          TICKET_BUTTON_REOPEN_ID,
           TICKET_BUTTON_DELETE_ID,
         ].includes(interaction.customId)
       ) {
