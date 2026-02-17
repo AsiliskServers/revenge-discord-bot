@@ -38,11 +38,11 @@ function buildEmbed() {
     .setDescription(
       "Ce système est un moyen automatisé vous permettant d'obtenir des rôles en réagissant à un message.\n\n" +
         "**🎭 Salons spécifiques**\n" +
-        "> Certains rôles vous donnent accès à des parties cachées du serveur.\n\n" +
+        "> *Certains rôles vous donnent accès à des parties cachées du serveur.*\n\n" +
         "**⚙️ Personnalisation**\n" +
-        "> Les utilisateurs peuvent choisir des rôles liés à leurs centres d’intérêt, mini-jeux, notifications, etc.\n\n" +
+        "> *Les utilisateurs peuvent choisir des rôles liés à leurs centres d’intérêt, mini-jeux, notifications, etc.*\n\n" +
         "**👍 Gestion simplifiée**\n" +
-        "> Évite aux administrateurs de devoir attribuer manuellement les rôles à chaque membre."
+        "> *Évite aux administrateurs de devoir attribuer manuellement les rôles à chaque membre.*"
     );
 }
 
