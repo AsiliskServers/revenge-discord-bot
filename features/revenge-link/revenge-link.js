@@ -1,5 +1,6 @@
 ﻿const fs = require("node:fs");
 const path = require("node:path");
+const { createHash } = require("node:crypto");
 const {
   AttachmentBuilder,
   ChannelType,
@@ -41,6 +42,36 @@ function findFirstExistingFile(candidates) {
     }
   }
   return null;
+}
+
+function getFileFingerprintPart(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    const stats = fs.statSync(filePath);
+    return {
+      name: path.basename(filePath),
+      size: stats.size,
+      mtimeMs: Math.floor(stats.mtimeMs),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildStateSignature({ thumbnail1Path, thumbnail2Path, gifPath }) {
+  const source = JSON.stringify({
+    titles: [TITLE_1, TITLE_2],
+    invites: [INVITE_URL_1, INVITE_URL_2],
+    colors: [0xe11d48, 0x22c55e],
+    thumbnail1: getFileFingerprintPart(thumbnail1Path),
+    thumbnail2: getFileFingerprintPart(thumbnail2Path),
+    gif: getFileFingerprintPart(gifPath),
+  });
+
+  return createHash("sha1").update(source).digest("hex");
 }
 
 function buildLinkEmbed({ title, inviteUrl, thumbnailAttachmentName, color }) {
@@ -113,6 +144,8 @@ async function ensureRevengeLinkMessage(client) {
   const thumbnail1Path = findFirstExistingFile(THUMBNAIL_1_CANDIDATES);
   const thumbnail2Path = findFirstExistingFile(THUMBNAIL_2_CANDIDATES);
   const gifPath = fs.existsSync(MIDDLE_GIF_PATH) ? MIDDLE_GIF_PATH : null;
+  const signature = buildStateSignature({ thumbnail1Path, thumbnail2Path, gifPath });
+
   const gifPayload = buildGifPayload(gifPath);
   const payloads = [
     buildLinkPayload({
@@ -155,9 +188,21 @@ async function ensureRevengeLinkMessage(client) {
     }
 
     if (messages.length === payloads.length) {
+      if (state.signature === signature) {
+        return;
+      }
+
       for (let i = 0; i < messages.length; i += 1) {
         await messages[i].edit(payloads[i]).catch(() => null);
       }
+
+      writeJsonFile(STATE_FILE, {
+        guildId: channel.guild.id,
+        channelId: channel.id,
+        messageIds: messages.map((message) => message.id),
+        signature,
+        version: 3,
+      });
       return;
     }
   }
@@ -173,7 +218,8 @@ async function ensureRevengeLinkMessage(client) {
     guildId: channel.guild.id,
     channelId: channel.id,
     messageIds,
-    version: 2,
+    signature,
+    version: 3,
   });
 }
 
