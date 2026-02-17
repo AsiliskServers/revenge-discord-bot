@@ -161,7 +161,7 @@ function buildHubPayload(client) {
         new ButtonBuilder()
           .setCustomId(CREATE_POLL_BUTTON_ID)
           .setStyle(ButtonStyle.Danger)
-          .setLabel("Creer une suggestion")
+          .setLabel("Créer une suggestion")
       ),
     ],
     allowedMentions: { parse: [] },
@@ -189,7 +189,7 @@ function buildCreatePollModal() {
     .setRequired(true)
     .setMinLength(10)
     .setMaxLength(1500)
-    .setPlaceholder("Explique ton idee ici.");
+    .setPlaceholder("Explique ton idée ici.");
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(titleInput),
@@ -205,9 +205,9 @@ function buildPollEmbed(poll) {
   const total = votesFor + votesAgainst;
   const percentFor = toPercent(votesFor, total);
   const percentAgainst = toPercent(votesAgainst, total);
-  const decisionStatus = poll.locked ? "Verrouillee" : "En attente";
+  const decisionStatus = poll.locked ? "Verrouillée" : "En attente";
   const decisionText = shortText(
-    poll.decisionReason || "Aucune decision pour le moment.",
+    poll.decisionReason || "Aucune décision pour le moment.",
     900
   ).replace(/`/g, "'");
   const decisionBy = poll.decidedById ? `\n\nPar:\n<@${poll.decidedById}>` : "";
@@ -224,7 +224,7 @@ function buildPollEmbed(poll) {
       },
       {
         name: "Suggestion",
-        value: poll.threadId ? `<#${poll.threadId}>` : "Creation suggestion...",
+        value: poll.threadId ? `<#${poll.threadId}>` : "Création suggestion...",
         inline: true,
       },
       {
@@ -243,12 +243,12 @@ function buildPollEmbed(poll) {
         inline: false,
       },
       {
-        name: "👮‍♂️ Decision du taff",
+        name: "👮‍♂️ Décision du taff",
         value: `\`${decisionText}\`${decisionBy}`,
         inline: false,
       }
     )
-    .setFooter({ text: `ID sondage: ${poll.id}` });
+    .setFooter({ text: `ID sondage : ${poll.id}` });
 }
 
 function buildPollPayload(poll) {
@@ -395,11 +395,11 @@ async function bumpHubMessageToBottom(client, channel) {
 
 function canCreateSuggestionInChannel(interaction) {
   if (!interaction.channel || interaction.channel.type !== ChannelType.GuildText) {
-    return "Salon invalide pour creer une suggestion.";
+    return "Salon invalide pour créer une suggestion.";
   }
 
   if (interaction.channel.id !== POLL_CHANNEL_ID) {
-    return `Ce systeme fonctionne uniquement dans <#${POLL_CHANNEL_ID}>.`;
+    return `Ce système fonctionne uniquement dans <#${POLL_CHANNEL_ID}>.`;
   }
 
   const botMember = interaction.guild?.members?.me;
@@ -416,7 +416,7 @@ function canCreateSuggestionInChannel(interaction) {
     perms?.has(PermissionFlagsBits.ManageThreads);
 
   if (!ok) {
-    return "Permissions bot manquantes: ViewChannel, SendMessages, CreatePublicThreads, SendMessagesInThreads, ManageThreads.";
+    return "Permissions bot manquantes : ViewChannel, SendMessages, CreatePublicThreads, SendMessagesInThreads, ManageThreads.";
   }
 
   return null;
@@ -473,8 +473,8 @@ async function createSuggestionFromModal(interaction) {
   ) {
     await interaction.reply({
       content:
-        `Tu as deja ${MAX_ACTIVE_SUGGESTIONS_PER_USER} suggestion(s) active(s). ` +
-        "Attends une decision du staff sur l'une d'elles pour en creer une nouvelle.",
+        `Tu as déjà ${MAX_ACTIVE_SUGGESTIONS_PER_USER} suggestion(s) active(s). ` +
+        "Attends une décision du staff sur l'une d'elles pour en créer une nouvelle.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -497,7 +497,7 @@ async function createSuggestionFromModal(interaction) {
     const thread = await pollMessage.startThread({
       name: shortText(poll.title, 100),
       autoArchiveDuration: 10080,
-      reason: `Suggestion creee par ${interaction.user.tag}`,
+      reason: `Suggestion créée par ${interaction.user.tag}`,
     });
 
     await thread.setArchived(false).catch(() => null);
@@ -516,13 +516,13 @@ async function createSuggestionFromModal(interaction) {
     await bumpHubMessageToBottom(interaction.client, interaction.channel).catch(() => null);
 
     await interaction.editReply({
-      content: `Suggestion creee. Discussion: <#${thread.id}>`,
+      content: `Suggestion créée. Discussion : <#${thread.id}>`,
     });
   } catch (error) {
-    console.error("[POLL] Echec creation suggestion");
+    console.error("[POLL] Échec création suggestion");
     console.error(error);
     await interaction.editReply({
-      content: "Impossible de creer la suggestion pour le moment.",
+      content: "Impossible de créer la suggestion pour le moment.",
     });
   }
 }
@@ -575,7 +575,7 @@ async function handleVoteButton(interaction, voteType) {
 
   if (interaction.user.bot) {
     await interaction.reply({
-      content: "Action non autorisee.",
+      content: "Action non autorisée.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -583,7 +583,7 @@ async function handleVoteButton(interaction, voteType) {
 
   if (poll.locked) {
     await interaction.reply({
-      content: "Cette suggestion est deja verrouillee.",
+      content: "Cette suggestion est déjà verrouillée.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -597,11 +597,11 @@ async function handleVoteButton(interaction, voteType) {
 
   let info = "Vote pris en compte.";
   if (result === "added_for") {
-    info = "Tu as vote Pour.";
+    info = "Tu as voté Pour.";
   } else if (result === "added_against") {
-    info = "Tu as vote Contre.";
+    info = "Tu as voté Contre.";
   } else if (result === "removed_for" || result === "removed_against") {
-    info = "Ton vote a ete retire.";
+    info = "Ton vote a été retiré.";
   }
 
   await interaction.followUp({
@@ -624,7 +624,7 @@ async function handleCloseSuggestionButton(interaction) {
 
   if (interaction.user.id !== poll.authorId) {
     await interaction.reply({
-      content: "Seul le createur de la suggestion peut la fermer.",
+      content: "Seul le créateur de la suggestion peut la fermer.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -632,7 +632,7 @@ async function handleCloseSuggestionButton(interaction) {
 
   if (poll.locked) {
     await interaction.reply({
-      content: "Cette suggestion est deja fermee.",
+      content: "Cette suggestion est déjà fermée.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -640,14 +640,14 @@ async function handleCloseSuggestionButton(interaction) {
 
   closePoll({
     poll,
-    reason: "Suggestion fermee par son createur.",
+    reason: "Suggestion fermée par son créateur.",
     closedById: interaction.user.id,
   });
 
   await lockSuggestionThread(
     interaction.client,
     poll,
-    `Suggestion fermee par ${interaction.user.tag}`
+    `Suggestion fermée par ${interaction.user.tag}`
   );
 
   await interaction.deferUpdate();
@@ -655,7 +655,7 @@ async function handleCloseSuggestionButton(interaction) {
 
   await interaction.followUp({
     content:
-      "Suggestion fermee. Tu peux maintenant en creer une autre si tu etais a la limite.",
+      "Suggestion fermée. Tu peux maintenant en créer une autre si tu étais à la limite.",
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -663,7 +663,7 @@ async function handleCloseSuggestionButton(interaction) {
 async function registerDecisionCommand(client) {
   const command = new SlashCommandBuilder()
     .setName(DECISION_COMMAND_NAME)
-    .setDescription("Verrouille une suggestion avec une decision staff")
+    .setDescription("Verrouille une suggestion avec une décision staff")
     .addStringOption((option) =>
       option
         .setName("id")
@@ -673,7 +673,7 @@ async function registerDecisionCommand(client) {
     .addStringOption((option) =>
       option
         .setName("raison")
-        .setDescription("Decision / raison staff")
+        .setDescription("Décision / raison staff")
         .setRequired(true)
         .setMaxLength(900)
     )
@@ -684,7 +684,7 @@ async function registerDecisionCommand(client) {
     commandName: DECISION_COMMAND_NAME,
     commandJson: command.toJSON(),
     logPrefix: "POLL",
-    missingGuildLog: `DISCORD_GUILD_ID absent, /${DECISION_COMMAND_NAME} non enregistre.`,
+    missingGuildLog: `DISCORD_GUILD_ID absent, /${DECISION_COMMAND_NAME} non enregistré.`,
   });
 }
 
@@ -718,13 +718,13 @@ async function handleDecisionCommand(interaction) {
   await lockSuggestionThread(
     interaction.client,
     poll,
-    `Suggestion fermee par ${interaction.user.tag}`
+    `Suggestion fermée par ${interaction.user.tag}`
   );
 
   await updateStoredPollMessage(interaction.client, poll);
 
   await interaction.reply({
-    content: `Suggestion \`${poll.id}\` verrouillee avec la decision staff.`,
+    content: `Suggestion \`${poll.id}\` verrouillée avec la décision staff.`,
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -742,7 +742,7 @@ module.exports = {
 
     client.once("clientReady", async () => {
       if (!hasConfiguredGuildId(client)) {
-        console.warn("[POLL] DISCORD_GUILD_ID absent, feature ignoree.");
+        console.warn("[POLL] DISCORD_GUILD_ID absent, feature ignorée.");
         return;
       }
 

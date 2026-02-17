@@ -57,7 +57,7 @@ const TICKET_REASONS = [
     value: "signalement-membre",
     label: "Signaler un membre",
     emoji: "📤",
-    description: "Signaler un comportement inapproprie",
+    description: "Signaler un comportement inapproprié",
   },
   {
     value: "contestation-sanction",
@@ -69,7 +69,7 @@ const TICKET_REASONS = [
     value: "bug",
     label: "Signaler un bug",
     emoji: "❗",
-    description: "Remonter un bug rencontre sur le serveur",
+    description: "Remonter un bug rencontré sur le serveur",
   },
   {
     value: "autres",
@@ -100,7 +100,7 @@ function resolveHubImageFile() {
     if (fs.existsSync(candidate)) {
       if (!selectedImageWarned) {
         selectedImageWarned = true;
-        console.log(`[TICKET] Image panel utilisee: ${candidate}`);
+        console.log(`[TICKET] Image panel utilisée : ${candidate}`);
       }
       return candidate;
     }
@@ -450,7 +450,7 @@ async function archiveTicketBeforeDelete(interaction, ticket) {
   await archiveChannel.send({
     content:
       `Archive ticket #${ticket.ticketNumber || "?"} - <#${ticket.channelId}> - ` +
-      `proprietaire <@${ticket.ownerId}>`,
+      `propriétaire <@${ticket.ownerId}>`,
     files: [attachment],
     allowedMentions: { parse: [] },
   });
@@ -511,7 +511,7 @@ async function buildTicketPermissionOverwrites(guild, ownerId) {
   const staffRoleIds = await resolveStaffRoleIds(guild);
   const botMemberId = guild.members.me?.id || guild.client.user?.id;
   if (!botMemberId) {
-    throw new Error("Bot member introuvable pour configurer les permissions ticket.");
+    throw new Error("Membre bot introuvable pour configurer les permissions ticket.");
   }
 
   const overwrites = [
@@ -700,7 +700,7 @@ function canUseSupportSelectInChannel(interaction) {
     perms?.has(PermissionFlagsBits.ManageChannels);
 
   if (!ok) {
-    return "Permissions bot manquantes: ViewChannel, SendMessages, ManageChannels.";
+    return "Permissions bot manquantes : ViewChannel, SendMessages, ManageChannels.";
   }
 
   return null;
@@ -770,13 +770,13 @@ async function createTicketFromSelect(interaction) {
     saveTicketStore();
 
     await interaction.editReply({
-      content: `Ticket cree: <#${ticketChannel.id}>`,
+      content: `Ticket créé : <#${ticketChannel.id}>`,
     });
   } catch (error) {
-    console.error("[TICKET] Echec creation ticket");
+    console.error("[TICKET] Échec création ticket");
     console.error(error);
     await interaction.editReply({
-      content: "Impossible de creer le ticket pour le moment.",
+      content: "Impossible de créer le ticket pour le moment.",
     });
   }
 }
@@ -789,8 +789,8 @@ async function handleClaim(interaction, ticket) {
 
   if (ticket.claimedById) {
     const claimBy = ticket.claimedById === interaction.user.id
-      ? "Tu as deja claim ce ticket."
-      : `Ticket deja claim par <@${ticket.claimedById}>.`;
+      ? "Tu as déjà claim ce ticket."
+      : `Ticket déjà claim par <@${ticket.claimedById}>.`;
     await replyEphemeral(interaction, claimBy);
     return;
   }
@@ -810,12 +810,12 @@ async function handleClaim(interaction, ticket) {
 async function handleClose(interaction, ticket) {
   const isOwner = interaction.user.id === ticket.ownerId;
   if (!isOwner && !isTicketStaff(interaction)) {
-    await replyEphemeral(interaction, "Seul le createur du ticket ou un staff peut le fermer.");
+    await replyEphemeral(interaction, "Seul le créateur du ticket ou un staff peut le fermer.");
     return;
   }
 
   if (ticket.status === "closed") {
-    await replyEphemeral(interaction, "Ce ticket est deja ferme.");
+    await replyEphemeral(interaction, "Ce ticket est déjà fermé.");
     return;
   }
 
@@ -828,7 +828,7 @@ async function handleClose(interaction, ticket) {
       {
         SendMessages: false,
       },
-      { reason: `Ticket ferme par ${interaction.user.tag}` }
+      { reason: `Ticket fermé par ${interaction.user.tag}` }
     )
     .catch(() => null);
 
@@ -836,7 +836,7 @@ async function handleClose(interaction, ticket) {
   await updateTicketPanelMessage(interaction.client, ticket);
 
   await interaction.followUp({
-    content: `Ticket ferme par <@${interaction.user.id}>.`,
+    content: `Ticket fermé par <@${interaction.user.id}>.`,
     allowedMentions: { users: [interaction.user.id], parse: [] },
   });
 }
@@ -850,7 +850,7 @@ async function handleDelete(interaction, ticket) {
   try {
     await archiveTicketBeforeDelete(interaction, ticket);
   } catch (error) {
-    console.error(`[TICKET] Echec archive ticket ${ticket.channelId}`);
+    console.error(`[TICKET] Échec archive ticket ${ticket.channelId}`);
     console.error(error);
   }
 
@@ -860,14 +860,14 @@ async function handleDelete(interaction, ticket) {
   await replyEphemeral(interaction, "Suppression du ticket...");
 
   await interaction.channel
-    .delete(`Ticket supprime par ${interaction.user.tag}`)
+    .delete(`Ticket supprimé par ${interaction.user.tag}`)
     .catch(() => null);
 }
 
 async function handleTicketButton(interaction) {
   const ticket = ticketStore.get(interaction.channelId);
   if (!ticket) {
-    await replyEphemeral(interaction, "Ticket introuvable ou deja supprime.");
+    await replyEphemeral(interaction, "Ticket introuvable ou déjà supprimé.");
     return;
   }
 
@@ -894,7 +894,7 @@ module.exports = {
 
     client.once("clientReady", async () => {
       if (!hasConfiguredGuildId(client)) {
-        console.warn("[TICKET] DISCORD_GUILD_ID absent, feature ignoree.");
+        console.warn("[TICKET] DISCORD_GUILD_ID absent, feature ignorée.");
         return;
       }
 

@@ -4,6 +4,6 @@ module.exports = {
   async init() {},
   async execute({ state, actions }) {
     const ok = await actions.replayCurrentTrack(state);
-    return ok ? "Lecture rejouee." : "Aucune piste a rejouer.";
+    return ok ? "Lecture rejouée." : "Aucune piste à rejouer.";
   },
 };

@@ -96,7 +96,7 @@ async function loadModulesFromDirectories() {
 
     if (!fs.existsSync(absoluteDirectory)) {
       if (VERBOSE_BOOT) {
-        console.log(`[INFO] Dossier absent, ignore: ${directory}/`);
+        console.log(`[INFO] Dossier absent, ignoré: ${directory}/`);
       }
       continue;
     }
@@ -105,7 +105,7 @@ async function loadModulesFromDirectories() {
 
     if (files.length === 0) {
       if (VERBOSE_BOOT) {
-        console.log(`[INFO] Aucun fichier .js trouve dans ${directory}/`);
+        console.log(`[INFO] Aucun fichier .js trouvé dans ${directory}/`);
       }
       continue;
     }
@@ -129,11 +129,11 @@ async function loadModulesFromDirectories() {
     }
   }
 
-  console.log(`[INFO] Modules charges: ${loadedCount}`);
+  console.log(`[INFO] Modules chargés: ${loadedCount}`);
 }
 
 client.once("clientReady", () => {
-  console.log(`[READY] Connecte en tant que ${client.user.tag}`);
+  console.log(`[READY] Connecté en tant que ${client.user.tag}`);
 });
 
 client.on("error", (error) => {

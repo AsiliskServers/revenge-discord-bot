@@ -364,7 +364,7 @@ async function downloadTrackToCache(track) {
       }
 
       removeCachedFilesByKey(cacheKey);
-      throw new Error("Aucun fichier audio valide telecharge.");
+      throw new Error("Aucun fichier audio valide téléchargé.");
     } catch (error) {
       lastError = error;
       removeCachedFilesByKey(cacheKey);
@@ -375,7 +375,7 @@ async function downloadTrackToCache(track) {
   }
 
   throw new Error(
-    `Echec du telechargement audio yt-dlp. ${lastError?.message || ""}`.trim()
+    `Échec du téléchargement audio yt-dlp. ${lastError?.message || ""}`.trim()
   );
 }
 
@@ -412,7 +412,7 @@ function prefetchNextTrack(state) {
 
   void ensureTrackCached(nextTrack).catch((error) => {
     console.warn(
-      `[MUSIC] Prefetch ignore pour ${nextTrack.url}: ${error?.message || error}`
+      `[MUSIC] Prefetch ignoré pour ${nextTrack.url}: ${error?.message || error}`
     );
   });
 }
@@ -492,7 +492,7 @@ function buildNowPlayingText(state) {
   const track = state.current;
   return (
     `[${track.title}](${track.url})\n` +
-    `Source: \`${track.source}\` | Duree: \`${formatDuration(track.durationInSec)}\` | Demande par: <@${track.requestedById}>`
+    `Source: \`${track.source}\` | Durée: \`${formatDuration(track.durationInSec)}\` | Demandé par: <@${track.requestedById}>`
   );
 }
 
@@ -539,7 +539,7 @@ function buildMusicEmbed(state, notice) {
         inline: true,
       },
       {
-        name: "Etat",
+        name: "État",
         value: `\`${formatPlayerStatus(state.player.state.status)}\``,
         inline: true,
       }
@@ -565,12 +565,12 @@ function buildMusicButtons(state) {
     new ButtonBuilder()
       .setCustomId(BUTTON_IDS.PREVIOUS)
       .setStyle(ButtonStyle.Secondary)
-      .setLabel("Precedente")
+      .setLabel("Précédente")
       .setDisabled(state.history.length === 0),
     new ButtonBuilder()
       .setCustomId(paused ? BUTTON_IDS.RESUME : BUTTON_IDS.PAUSE)
       .setStyle(ButtonStyle.Secondary)
-      .setLabel(paused ? "Resume" : "Pause")
+      .setLabel(paused ? "Reprise" : "Pause")
       .setDisabled(!state.current),
     new ButtonBuilder()
       .setCustomId(BUTTON_IDS.REPLAY)
@@ -593,7 +593,7 @@ function buildMusicButtons(state) {
     new ButtonBuilder()
       .setCustomId(BUTTON_IDS.STOP)
       .setStyle(ButtonStyle.Danger)
-      .setLabel("Deconnecter")
+      .setLabel("Déconnecter")
       .setDisabled(!state.current && state.queue.length === 0)
   );
 
@@ -666,7 +666,7 @@ async function ensureVoiceConnection(state, voiceChannel) {
       ]);
     } catch {
       stopAndCleanup(state);
-      await updateControlMessage(state, "Bot deconnecte du vocal.");
+      await updateControlMessage(state, "Bot déconnecté du vocal.");
     }
   });
 
@@ -797,7 +797,7 @@ async function handleIdleState(state) {
       }
     }
 
-    await updateControlMessage(state, "Queue terminee.");
+    await updateControlMessage(state, "Queue terminée.");
   } catch (error) {
     console.error(`[MUSIC] Idle handler failed on guild ${state.guildId}`);
     console.error(error);
@@ -882,8 +882,8 @@ async function resolveYouTubeTracks(input, requestedById) {
           tracks,
           notice:
             allVideos.length > MAX_YOUTUBE_PLAYLIST_TRACKS
-              ? `Playlist ajoutee (limite ${MAX_YOUTUBE_PLAYLIST_TRACKS} titres).`
-              : "Playlist ajoutee.",
+              ? `Playlist ajoutée (limite ${MAX_YOUTUBE_PLAYLIST_TRACKS} titres).`
+              : "Playlist ajoutée.",
         };
       }
     } catch (error) {
@@ -900,11 +900,11 @@ async function resolveYouTubeTracks(input, requestedById) {
       "youtube"
     );
     if (!track) {
-      throw new Error("Impossible de lire cette video YouTube.");
+      throw new Error("Impossible de lire cette vidéo YouTube.");
     }
     return {
       tracks: [track],
-      notice: "Titre YouTube ajoute.",
+      notice: "Titre YouTube ajouté.",
     };
   }
 
@@ -915,17 +915,17 @@ async function resolveYouTubeTracks(input, requestedById) {
 
   const first = searchResults?.[0];
   if (!first) {
-    throw new Error("Aucun resultat YouTube trouve.");
+    throw new Error("Aucun résultat YouTube trouvé.");
   }
 
   const track = convertYouTubeVideoToTrack(first, requestedById, "youtube");
   if (!track) {
-    throw new Error("Resultat YouTube invalide.");
+    throw new Error("Résultat YouTube invalide.");
   }
 
   return {
     tracks: [track],
-    notice: "Resultat YouTube ajoute.",
+    notice: "Résultat YouTube ajouté.",
   };
 }
 
@@ -938,7 +938,7 @@ async function resolveInputToTracks(input, requestedById) {
     validated === "sp_playlist" ||
     validated === "sp_album"
   ) {
-    throw new Error("Les liens Spotify ne sont plus supportes.");
+    throw new Error("Les liens Spotify ne sont plus supportés.");
   }
 
   if (
@@ -1003,11 +1003,11 @@ function hasVoicePermissionsForBot(interaction, voiceChannel) {
 function canControlMusic(interaction, state) {
   const member = interaction.member;
   if (!member || !member.voice?.channelId) {
-    return "Rejoins un salon vocal pour controler la musique.";
+    return "Rejoins un salon vocal pour contrôler la musique.";
   }
 
   if (state.voiceChannelId && member.voice.channelId !== state.voiceChannelId) {
-    return "Tu dois etre dans le meme salon vocal que le bot.";
+    return "Tu dois être dans le même salon vocal que le bot.";
   }
 
   return null;
@@ -1085,7 +1085,7 @@ async function handlePlayCommand(interaction) {
     await interaction.editReply({
       content:
         error?.message === "Not a YouTube domain"
-          ? "Lien invalide. Utilise une URL YouTube complete, par ex: https://www.youtube.com/watch?v=..."
+          ? "Lien invalide. Utilise une URL YouTube complète, par ex : https://www.youtube.com/watch?v=..."
           : buildSafeMusicErrorMessage(error),
     });
   }
@@ -1103,7 +1103,7 @@ async function handleMusicButton(interaction) {
 
   if (interaction.message.id !== state.controlMessageId) {
     await interaction.reply({
-      content: "Ce panneau de controle n'est plus actif.",
+      content: "Ce panneau de contrôle n'est plus actif.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1144,18 +1144,18 @@ async function handleMusicButton(interaction) {
   } catch (error) {
     console.error("[MUSIC] Button action failed");
     console.error(error);
-    await updateControlMessage(state, "Erreur lors du controle.");
+    await updateControlMessage(state, "Erreur lors du contrôle.");
   }
 }
 
 async function registerMusicCommand(client) {
   const command = new SlashCommandBuilder()
     .setName(COMMAND_NAME)
-    .setDescription("Joue une musique a partir d'un lien ou d'une recherche")
+    .setDescription("Joue une musique à partir d'un lien ou d'une recherche")
     .addStringOption((option) =>
       option
         .setName("lien")
-        .setDescription("Lien YouTube (video, playlist, mix)")
+        .setDescription("Lien YouTube (vidéo, playlist, mix)")
         .setRequired(false)
     )
     .addStringOption((option) =>
@@ -1170,7 +1170,7 @@ async function registerMusicCommand(client) {
     commandName: COMMAND_NAME,
     commandJson: command.toJSON(),
     logPrefix: "MUSIC",
-    missingGuildLog: "DISCORD_GUILD_ID absent, /play non enregistre.",
+    missingGuildLog: "DISCORD_GUILD_ID absent, /play non enregistré.",
   });
 
   await deleteGuildCommand({

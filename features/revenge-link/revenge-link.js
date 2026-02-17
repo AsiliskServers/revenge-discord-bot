@@ -228,7 +228,7 @@ module.exports = {
   async init(client) {
     client.once("clientReady", async () => {
       if (!hasConfiguredGuildId(client)) {
-        console.warn("[REVENGE LINK] DISCORD_GUILD_ID absent, feature ignoree.");
+        console.warn("[REVENGE LINK] DISCORD_GUILD_ID absent, feature ignorée.");
         return;
       }
 

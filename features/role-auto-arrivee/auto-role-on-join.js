@@ -17,7 +17,7 @@ module.exports = {
 
         if (!role) {
           console.error(
-            `[AUTO_ROLE] Role introuvable (${AUTO_ROLE_ID}) sur ${member.guild.name}`
+            `[AUTO_ROLE] Rôle introuvable (${AUTO_ROLE_ID}) sur ${member.guild.name}`
           );
           return;
         }
@@ -27,7 +27,7 @@ module.exports = {
           (await member.guild.members.fetchMe().catch(() => null));
 
         if (!botMember) {
-          console.error(`[AUTO_ROLE] Impossible de recuperer le membre bot sur ${member.guild.name}`);
+          console.error(`[AUTO_ROLE] Impossible de récupérer le membre bot sur ${member.guild.name}`);
           return;
         }
 
@@ -38,15 +38,15 @@ module.exports = {
 
         if (botMember.roles.highest.comparePositionTo(role) <= 0) {
           console.error(
-            `[AUTO_ROLE] Le role du bot doit etre au-dessus du role cible (${role.name})`
+            `[AUTO_ROLE] Le rôle du bot doit être au-dessus du rôle cible (${role.name})`
           );
           return;
         }
 
-        await member.roles.add(role, "Role automatique a l'arrivee");
-        console.log(`[AUTO_ROLE] Role ${role.name} ajoute a ${member.user.tag} (${member.id})`);
+        await member.roles.add(role, "Rôle automatique à l'arrivée");
+        console.log(`[AUTO_ROLE] Rôle ${role.name} ajouté à ${member.user.tag} (${member.id})`);
       } catch (error) {
-        console.error(`[AUTO_ROLE] Echec pour ${member.user?.tag || member.id} (${member.id})`);
+        console.error(`[AUTO_ROLE] Échec pour ${member.user?.tag || member.id} (${member.id})`);
         console.error(error);
       }
     });

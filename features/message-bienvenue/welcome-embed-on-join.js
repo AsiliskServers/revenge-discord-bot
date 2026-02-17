@@ -25,9 +25,9 @@ function buildWelcomeEmbed({ member, titleUrl, botAvatarUrl }) {
     .setTitle("REVENGE・DISCORD")
     .setURL(titleUrl)
     .setDescription(
-      `Bienvenue a toi ${member} chez la REVENGE.\n\n` +
-        `C'est un plaisir de t'accueillir, le discord compte desormais ${member.guild.memberCount} personnes ❗\n` +
-        "Merci d'agrandir la Famille, installe toi et profite 🎉"
+      `Bienvenue à toi ${member} chez la REVENGE.\n\n` +
+        `C'est un plaisir de t'accueillir, le discord compte désormais ${member.guild.memberCount} personnes ❗\n` +
+        "Merci d'agrandir la Famille, installe-toi et profite 🎉"
     )
     .setFooter({
       text: "REVENGE | Bienvenue",
@@ -67,7 +67,7 @@ module.exports = {
           (await member.guild.members.fetchMe().catch(() => null));
 
         if (!botMember) {
-          console.error(`[WELCOME] Impossible de recuperer le membre bot sur ${member.guild.name}`);
+          console.error(`[WELCOME] Impossible de récupérer le membre bot sur ${member.guild.name}`);
           return;
         }
 
@@ -100,10 +100,10 @@ module.exports = {
         });
 
         console.log(
-          `[WELCOME] Message envoye pour ${member.user.tag} dans #${welcomeChannel.name}`
+          `[WELCOME] Message envoyé pour ${member.user.tag} dans #${welcomeChannel.name}`
         );
       } catch (error) {
-        console.error(`[WELCOME] Echec pour ${member.user?.tag || member.id} (${member.id})`);
+        console.error(`[WELCOME] Échec pour ${member.user?.tag || member.id} (${member.id})`);
         console.error(error);
       }
     });

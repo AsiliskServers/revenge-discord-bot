@@ -4,6 +4,6 @@ module.exports = {
   async init() {},
   async execute({ state, actions }) {
     const removed = actions.clearQueue(state);
-    return `Queue videe (${removed} titre(s) supprimes).`;
+    return `Queue vidée (${removed} titre(s) supprimé(s)).`;
   },
 };

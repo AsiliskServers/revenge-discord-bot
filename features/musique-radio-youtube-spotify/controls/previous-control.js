@@ -4,6 +4,6 @@ module.exports = {
   async init() {},
   async execute({ state, actions }) {
     const ok = await actions.playPreviousTrack(state);
-    return ok ? "Piste precedente." : "Historique vide.";
+    return ok ? "Piste précédente." : "Historique vide.";
   },
 };

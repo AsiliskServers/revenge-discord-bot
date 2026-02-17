@@ -58,10 +58,10 @@ async function replyEphemeral(interaction, content, extra = {}) {
 
 function getModeLabel(mode) {
   if (mode === MODE_CLOSED) {
-    return "Ferme";
+    return "Fermé";
   }
   if (mode === MODE_PRIVATE) {
-    return "Prive";
+    return "Privé";
   }
   return "Ouvert";
 }
@@ -167,8 +167,8 @@ async function buildVoiceOverwrites(guild, state) {
 
 function buildPanelEmbed(state) {
   const limitLabel = state.userLimit > 0 ? String(state.userLimit) : "Illimite";
-  const micLabel = state.micBlocked ? "Micro bloque" : "Micro autorise";
-  const videoLabel = state.videoBlocked ? "Video bloquee" : "Video autorisee";
+  const micLabel = state.micBlocked ? "Micro bloqué" : "Micro autorisé";
+  const videoLabel = state.videoBlocked ? "Vidéo bloquée" : "Vidéo autorisée";
 
   return new EmbedBuilder()
     .setColor(0xe11d48)
@@ -176,7 +176,7 @@ function buildPanelEmbed(state) {
     .setDescription(
       `Proprietaire du salon : <@${state.ownerId}>\n\n` +
         "Voici l'espace de configuration de votre salon vocal temporaire. " +
-        "Utilisez les controles ci-dessous pour gerer rapidement votre salon."
+        "Utilisez les contrôles ci-dessous pour gérer rapidement votre salon."
     )
     .addFields(
       {
@@ -201,7 +201,7 @@ function buildPanelEmbed(state) {
       },
       {
         name: "Transfert",
-        value: "Transferez la propriete du salon a un autre membre.",
+        value: "Transférez la propriété du salon à un autre membre.",
         inline: false,
       }
     );
@@ -217,31 +217,31 @@ function buildPanelComponents(state) {
       new ButtonBuilder()
         .setCustomId(PANEL_BTN_CLOSED)
         .setStyle(state.mode === MODE_CLOSED ? ButtonStyle.Danger : ButtonStyle.Secondary)
-        .setLabel("Ferme"),
+        .setLabel("Fermé"),
       new ButtonBuilder()
         .setCustomId(PANEL_BTN_PRIVATE)
         .setStyle(state.mode === MODE_PRIVATE ? ButtonStyle.Primary : ButtonStyle.Secondary)
-        .setLabel("Prive")
+        .setLabel("Privé")
     ),
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(PANEL_BTN_MIC)
         .setStyle(state.micBlocked ? ButtonStyle.Danger : ButtonStyle.Secondary)
-        .setLabel(state.micBlocked ? "Debloquer micro" : "Bloquer micro"),
+        .setLabel(state.micBlocked ? "Débloquer micro" : "Bloquer micro"),
       new ButtonBuilder()
         .setCustomId(PANEL_BTN_VIDEO)
         .setStyle(state.videoBlocked ? ButtonStyle.Danger : ButtonStyle.Secondary)
-        .setLabel(state.videoBlocked ? "Debloquer video" : "Bloquer video")
+        .setLabel(state.videoBlocked ? "Débloquer vidéo" : "Bloquer vidéo")
     ),
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(PANEL_BTN_LIMIT)
         .setStyle(ButtonStyle.Secondary)
-        .setLabel("Regler limite"),
+        .setLabel("Régler limite"),
       new ButtonBuilder()
         .setCustomId(PANEL_BTN_TRANSFER)
         .setStyle(ButtonStyle.Secondary)
-        .setLabel("Transferer")
+        .setLabel("Transférer")
     ),
   ];
 }
@@ -349,7 +349,7 @@ async function scheduleDeleteIfEmpty(channelId, guild) {
       await freshChannel.delete("Salon vocal temporaire vide (auto-clean)");
       tempVoiceStateByChannelId.delete(channelId);
     } catch (error) {
-      console.error(`[VOICE CREATOR] Echec suppression salon vide ${channelId}`);
+      console.error(`[VOICE CREATOR] Échec suppression salon vide ${channelId}`);
       console.error(error);
     }
   }, EMPTY_DELETE_DELAY_MS);
@@ -378,15 +378,15 @@ function parseUserId(value) {
 function buildLimitModal(channelId, currentLimit) {
   const modal = new ModalBuilder()
     .setCustomId(`${LIMIT_MODAL_PREFIX}${channelId}`)
-    .setTitle("Regler la limite");
+    .setTitle("Régler la limite");
 
   const input = new TextInputBuilder()
     .setCustomId(LIMIT_FIELD_ID)
-    .setLabel("Nombre max (0 a 99)")
+    .setLabel("Nombre max (0 à 99)")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setValue(String(currentLimit || 0))
-    .setPlaceholder("0 pour illimite");
+    .setPlaceholder("0 pour illimité");
 
   modal.addComponents(new ActionRowBuilder().addComponents(input));
   return modal;
@@ -395,7 +395,7 @@ function buildLimitModal(channelId, currentLimit) {
 function buildTransferModal(channelId) {
   const modal = new ModalBuilder()
     .setCustomId(`${TRANSFER_MODAL_PREFIX}${channelId}`)
-    .setTitle("Transferer la propriete");
+    .setTitle("Transférer la propriété");
 
   const input = new TextInputBuilder()
     .setCustomId(TRANSFER_FIELD_ID)
@@ -434,7 +434,7 @@ async function createTempVoiceForMember(member) {
     parent: VOICE_TARGET_CATEGORY_ID,
     userLimit: 0,
     permissionOverwrites,
-    reason: `Salon vocal temporaire cree pour ${member.user.tag}`,
+    reason: `Salon vocal temporaire créé pour ${member.user.tag}`,
   });
 
   tempVoiceStateByChannelId.set(channel.id, state);
@@ -456,7 +456,7 @@ async function handleToggleMic(interaction, state) {
   await applyVoicePermissions(
     interaction.channel,
     state,
-    `Blocage micro modifie par ${interaction.user.tag}`
+    `Blocage micro modifié par ${interaction.user.tag}`
   );
   await ensurePanelMessage(interaction.channel, state);
   await interaction.deferUpdate();
@@ -467,7 +467,7 @@ async function handleToggleVideo(interaction, state) {
   await applyVoicePermissions(
     interaction.channel,
     state,
-    `Blocage video modifie par ${interaction.user.tag}`
+    `Blocage vidéo modifié par ${interaction.user.tag}`
   );
   await ensurePanelMessage(interaction.channel, state);
   await interaction.deferUpdate();
@@ -481,7 +481,7 @@ async function handlePanelButton(interaction) {
   }
 
   if (!canManageVoicePanel(interaction, state)) {
-    await replyEphemeral(interaction, "Seul le proprietaire du salon peut utiliser ce panneau.");
+    await replyEphemeral(interaction, "Seul le propriétaire du salon peut utiliser ce panneau.");
     return;
   }
 
@@ -521,19 +521,19 @@ async function handleLimitModal(interaction) {
   }
 
   if (!canManageVoicePanel(interaction, state)) {
-    await replyEphemeral(interaction, "Action reservee au proprietaire.");
+    await replyEphemeral(interaction, "Action réservée au propriétaire.");
     return;
   }
 
   const rawValue = interaction.fields.getTextInputValue(LIMIT_FIELD_ID).trim();
   if (!/^\d{1,2}$/.test(rawValue)) {
-    await replyEphemeral(interaction, "Entre une valeur numerique entre 0 et 99.");
+    await replyEphemeral(interaction, "Entre une valeur numérique entre 0 et 99.");
     return;
   }
 
   const limit = Number(rawValue);
   if (!Number.isInteger(limit) || limit < 0 || limit > 99) {
-    await replyEphemeral(interaction, "La limite doit etre entre 0 et 99.");
+    await replyEphemeral(interaction, "La limite doit être entre 0 et 99.");
     return;
   }
 
@@ -544,10 +544,10 @@ async function handleLimitModal(interaction) {
   }
 
   state.userLimit = limit;
-  await channel.setUserLimit(limit, `Limite modifiee par ${interaction.user.tag}`).catch(() => null);
+  await channel.setUserLimit(limit, `Limite modifiée par ${interaction.user.tag}`).catch(() => null);
   await ensurePanelMessage(channel, state);
 
-  await replyEphemeral(interaction, `Limite mise a jour: ${limit === 0 ? "illimite" : limit}.`);
+  await replyEphemeral(interaction, `Limite mise à jour : ${limit === 0 ? "illimité" : limit}.`);
 }
 
 async function handleTransferModal(interaction) {
@@ -559,7 +559,7 @@ async function handleTransferModal(interaction) {
   }
 
   if (!canManageVoicePanel(interaction, state)) {
-    await replyEphemeral(interaction, "Action reservee au proprietaire.");
+    await replyEphemeral(interaction, "Action réservée au propriétaire.");
     return;
   }
 
@@ -577,7 +577,7 @@ async function handleTransferModal(interaction) {
   }
 
   if (member.user.bot) {
-    await replyEphemeral(interaction, "Impossible de transferer a un bot.");
+    await replyEphemeral(interaction, "Impossible de transférer à un bot.");
     return;
   }
 
@@ -588,10 +588,10 @@ async function handleTransferModal(interaction) {
   }
 
   state.ownerId = member.id;
-  await applyVoicePermissions(channel, state, `Propriete transferee par ${interaction.user.tag}`);
+  await applyVoicePermissions(channel, state, `Propriété transférée par ${interaction.user.tag}`);
   await ensurePanelMessage(channel, state);
 
-  await replyEphemeral(interaction, `Propriete transferee a <@${member.id}>.`, {
+  await replyEphemeral(interaction, `Propriété transférée à <@${member.id}>.`, {
     allowedMentions: { users: [member.id], parse: [] },
   });
 }
@@ -607,7 +607,7 @@ async function handleVoiceStateUpdate(oldState, newState) {
     oldState.channelId !== VOICE_CREATOR_CHANNEL_ID
   ) {
     await createTempVoiceForMember(member).catch((error) => {
-      console.error("[VOICE CREATOR] Echec creation du vocal temporaire");
+      console.error("[VOICE CREATOR] Échec création du vocal temporaire");
       console.error(error);
     });
     return;
@@ -628,7 +628,7 @@ module.exports = {
   async init(client) {
     client.once("clientReady", async () => {
       if (!hasConfiguredGuildId(client)) {
-        console.warn("[VOICE CREATOR] DISCORD_GUILD_ID absent, feature ignoree.");
+        console.warn("[VOICE CREATOR] DISCORD_GUILD_ID absent, feature ignorée.");
         return;
       }
 
@@ -641,7 +641,7 @@ module.exports = {
       const trigger = await guild.channels.fetch(VOICE_CREATOR_CHANNEL_ID).catch(() => null);
       if (!trigger || trigger.type !== ChannelType.GuildVoice) {
         console.warn(
-          `[VOICE CREATOR] Salon createur invalide ou introuvable (${VOICE_CREATOR_CHANNEL_ID}).`
+          `[VOICE CREATOR] Salon créateur invalide ou introuvable (${VOICE_CREATOR_CHANNEL_ID}).`
         );
       }
     });

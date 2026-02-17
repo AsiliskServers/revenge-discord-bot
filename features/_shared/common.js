@@ -69,15 +69,15 @@ async function upsertGuildCommand({
 
     if (existing) {
       await guild.commands.edit(existing.id, commandJson);
-      console.log(`[${logPrefix}] /${commandName} command updated`);
+      console.log(`[${logPrefix}] Commande /${commandName} mise à jour`);
     } else {
       await guild.commands.create(commandJson);
-      console.log(`[${logPrefix}] /${commandName} command created`);
+      console.log(`[${logPrefix}] Commande /${commandName} créée`);
     }
 
     return true;
   } catch (error) {
-    console.error(`[${logPrefix}] Failed to register /${commandName}`);
+    console.error(`[${logPrefix}] Échec d'enregistrement de /${commandName}`);
     console.error(error);
     return false;
   }
@@ -103,10 +103,10 @@ async function deleteGuildCommand({
     }
 
     await guild.commands.delete(existing.id);
-    console.log(`[${logPrefix}] Legacy /${commandName} command removed`);
+    console.log(`[${logPrefix}] Ancienne commande /${commandName} supprimée`);
     return true;
   } catch (error) {
-    console.error(`[${logPrefix}] ${failLog || `Failed to delete /${commandName}`}`);
+    console.error(`[${logPrefix}] ${failLog || `Échec de suppression de /${commandName}`}`);
     console.error(error);
     return false;
   }

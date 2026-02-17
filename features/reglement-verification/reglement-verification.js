@@ -114,21 +114,21 @@ function generateCaptchaPng(code) {
 function buildRulesEmbed() {
   return new EmbedBuilder()
     .setColor(0xe11d48)
-    .setTitle("📝  REGLEMENT DU DISCORD")
+    .setTitle("📝  RÈGLEMENT DU DISCORD")
     .setDescription(
-      "Ce reglement est a lire attentivement si vous souhaitez eviter tout probleme au sein du Discord. Certains comportements vous vaudront automatiquement l'ejection, voire le bannissement temporaire ou definitif.\n\n" +
-        "🗺️・ SERVEUR DISCORD EN GENERAL\n" +
-        "Les pseudonymes inappropries, incarner des personnages fictifs, jouer avec les sentiments des gens, ainsi que l'usurpation d'identite sont strictement interdits.\n\n" +
-        "Ce Discord n'est pas l'endroit pour regler vos conflits interpersonnels. Par consequent, si la discussion degenere en querelle, vous serez invite a poursuivre en prive votre discussion. Si vous persistez dans vos actions, vous serez sanctionne.\n\n" +
-        "Tous les membres de la Revenge travaillent benevolement pour maintenir un climat agreable et appliquer les regles sur les canaux. Que vous soyez ou non d'accord, vous n'avez aucun droit de vous en prendre a eux. Dans le cas contraire, ils seront en droit de vous appliquer toute sanction necessaire.\n\n" +
-        "Nous conseillons a notre communaute de laisser leurs opinions politiques et leurs appartenances religieuses a la porte de ce Discord.\n\n" +
+      "Ce règlement est à lire attentivement si vous souhaitez éviter tout problème au sein du Discord. Certains comportements vous vaudront automatiquement l'éjection, voire le bannissement temporaire ou définitif.\n\n" +
+        "🗺️・ SERVEUR DISCORD EN GÉNÉRAL\n" +
+        "Les pseudonymes inappropriés, incarner des personnages fictifs, jouer avec les sentiments des gens, ainsi que l'usurpation d'identité sont strictement interdits.\n\n" +
+        "Ce Discord n'est pas l'endroit pour régler vos conflits interpersonnels. Par conséquent, si la discussion dégénère en querelle, vous serez invité à poursuivre en privé votre discussion. Si vous persistez dans vos actions, vous serez sanctionné.\n\n" +
+        "Tous les membres de la Revenge travaillent bénévolement pour maintenir un climat agréable et appliquer les règles sur les canaux. Que vous soyez ou non d'accord, vous n'avez aucun droit de vous en prendre à eux. Dans le cas contraire, ils seront en droit de vous appliquer toute sanction nécessaire.\n\n" +
+        "Nous conseillons à notre communauté de laisser leurs opinions politiques et leurs appartenances religieuses à la porte de ce Discord.\n\n" +
         "N'oubliez pas le respect et la politesse.\n\n" +
         "✏️・ SALONS TEXTUELS\n" +
-        "Tout spam abusif, troll, provocations, flood et diffusion d'informations privees/personnelles sont interdits.\n\n" +
-        "La publicite sera seulement autorisee dans un salon dedie.\n\n" +
+        "Tout spam abusif, troll, provocations, flood et diffusion d'informations privées/personnelles sont interdits.\n\n" +
+        "La publicité sera seulement autorisée dans un salon dédié.\n\n" +
         "🔊・ SALONS VOCAUX\n" +
         "Le spam micro, les trolls et les modificateurs de voix sont strictement interdits.\n\n" +
-        "Etre present sous differents pseudos sans raison valable est strictement interdit."
+        "Être présent sous différents pseudos sans raison valable est strictement interdit."
     );
 }
 
@@ -215,7 +215,7 @@ async function findExistingRulesMessage(channel, botId) {
 
 async function ensureRulesMessage(client) {
   if (!hasConfiguredGuildId(client)) {
-    console.warn("[RULES] DISCORD_GUILD_ID absent, feature ignoree.");
+    console.warn("[RULES] DISCORD_GUILD_ID absent, feature ignorée.");
     return;
   }
 
@@ -227,7 +227,7 @@ async function ensureRulesMessage(client) {
 
   const channel = await fetchGuildTextChannel(guild, RULES_CHANNEL_ID);
   if (!channel) {
-    console.error(`[RULES] Salon reglement invalide (${RULES_CHANNEL_ID}).`);
+    console.error(`[RULES] Salon règlement invalide (${RULES_CHANNEL_ID}).`);
     return;
   }
 
@@ -268,7 +268,7 @@ async function assignVerifiedRole(member) {
     (await member.guild.roles.fetch(VERIFIED_ROLE_ID).catch(() => null));
 
   if (!role) {
-    return { ok: false, reason: "Role de verification introuvable." };
+    return { ok: false, reason: "Rôle de vérification introuvable." };
   }
 
   const botMember =
@@ -285,18 +285,18 @@ async function assignVerifiedRole(member) {
   if (botMember.roles.highest.comparePositionTo(role) <= 0) {
     return {
       ok: false,
-      reason: "Le role du bot doit etre au-dessus du role de verification.",
+      reason: "Le rôle du bot doit être au-dessus du rôle de vérification.",
     };
   }
 
-  await member.roles.add(role, "Verification reglement captcha");
+  await member.roles.add(role, "Vérification règlement captcha");
   return { ok: true, already: false };
 }
 
 async function handleAcceptButton(interaction, client) {
   if (interaction.guildId !== client.config?.guildId) {
     await interaction.reply({
-      content: "Interaction non autorisee sur ce serveur.",
+      content: "Interaction non autorisée sur ce serveur.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -305,7 +305,7 @@ async function handleAcceptButton(interaction, client) {
   const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
   if (!member) {
     await interaction.reply({
-      content: "Impossible de recuperer ton profil serveur.",
+      content: "Impossible de récupérer ton profil serveur.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -313,7 +313,7 @@ async function handleAcceptButton(interaction, client) {
 
   if (member.roles.cache.has(VERIFIED_ROLE_ID)) {
     await interaction.reply({
-      content: "Tu es deja verifie.",
+      content: "Tu es déjà vérifié.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -324,10 +324,10 @@ async function handleAcceptButton(interaction, client) {
 
   const embed = new EmbedBuilder()
     .setColor(0xe11d48)
-    .setTitle("Verification Captcha")
+    .setTitle("Vérification Captcha")
     .setDescription(
-      "Lis les caracteres de l'image, puis clique sur `Résoudre`.\n\n" +
-        "Ce formulaire sera transmis a Revenge. Ne donne pas de mot de passe ni toute autre information sensible."
+      "Lis les caractères de l'image, puis clique sur `Résoudre`.\n\n" +
+        "Ce formulaire sera transmis à Revenge. Ne donne pas de mot de passe ni toute autre information sensible."
     )
     .setImage(`attachment://${fileName}`);
 
@@ -353,7 +353,7 @@ async function handleSolveButton(interaction) {
 
   if (!session) {
     await interaction.reply({
-      content: "Captcha expire. Clique a nouveau sur ACCEPTER.",
+      content: "Captcha expiré. Clique à nouveau sur ACCEPTER.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -369,18 +369,18 @@ async function handleSolveButton(interaction) {
 
   const modal = new ModalBuilder()
     .setCustomId(`${MODAL_PREFIX}${token}`)
-    .setTitle("Resolution Captcha")
+    .setTitle("Résolution Captcha")
     .addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId(CAPTCHA_INPUT_ID)
-          .setLabel("Reecris les caracteres ci-dessous")
+          .setLabel("Réécris les caractères ci-dessous")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
           .setMinLength(4)
           .setMaxLength(12)
           .setPlaceholder(
-            "Formulaire transmis a Revenge. Ne donne pas d'infos sensibles."
+            "Formulaire transmis à Revenge. Ne donne pas d'infos sensibles."
           )
       )
     );
@@ -394,7 +394,7 @@ async function handleCaptchaModal(interaction) {
 
   if (!session) {
     await interaction.reply({
-      content: "Captcha expire. Clique a nouveau sur ACCEPTER.",
+      content: "Captcha expiré. Clique à nouveau sur ACCEPTER.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -423,7 +423,7 @@ async function handleCaptchaModal(interaction) {
 
   if (!member) {
     await interaction.reply({
-      content: "Impossible de recuperer ton profil serveur.",
+      content: "Impossible de récupérer ton profil serveur.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -433,7 +433,7 @@ async function handleCaptchaModal(interaction) {
     const result = await assignVerifiedRole(member);
     if (!result.ok) {
       await interaction.reply({
-        content: `Verification echouee: ${result.reason}`,
+        content: `Vérification échouée : ${result.reason}`,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -441,15 +441,15 @@ async function handleCaptchaModal(interaction) {
 
     await interaction.reply({
       content: result.already
-        ? "Tu es deja verifie."
-        : "Verification validee. Tu as maintenant acces au serveur.",
+        ? "Tu es déjà vérifié."
+        : "Vérification validée. Tu as maintenant accès au serveur.",
       flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
-    console.error("[RULES] Attribution role verification impossible");
+    console.error("[RULES] Attribution rôle vérification impossible");
     console.error(error);
     await interaction.reply({
-      content: "Une erreur est survenue. Reessaie dans un instant.",
+      content: "Une erreur est survenue. Réessaie dans un instant.",
       flags: MessageFlags.Ephemeral,
     });
   }

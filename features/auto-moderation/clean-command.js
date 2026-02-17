@@ -1,4 +1,4 @@
-const {
+﻿const {
   MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
@@ -87,7 +87,7 @@ async function handleCleanCommand(interaction) {
 
   if (!interaction.inGuild()) {
     await interaction.reply({
-      content: "Commande reservee aux serveurs.",
+      content: "Commande réservée aux serveurs.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -95,7 +95,7 @@ async function handleCleanCommand(interaction) {
 
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
     await interaction.reply({
-      content: "Permission requise: ManageMessages.",
+      content: "Permission requise : ManageMessages.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -139,8 +139,8 @@ async function handleCleanCommand(interaction) {
       await interaction.editReply({
         content:
           mode === MODE_BOT
-            ? "Aucun message de bot trouve a supprimer."
-            : "Aucun message trouve a supprimer.",
+            ? "Aucun message de bot trouvé à supprimer."
+            : "Aucun message trouvé à supprimer.",
       });
       return;
     }
@@ -149,7 +149,7 @@ async function handleCleanCommand(interaction) {
     if (!deletable.length) {
       await interaction.editReply({
         content:
-          "Aucun message supprimable (les messages trouves ont plus de 14 jours).",
+          "Aucun message supprimable (les messages trouvés ont plus de 14 jours).",
       });
       return;
     }
@@ -161,14 +161,14 @@ async function handleCleanCommand(interaction) {
       mode === MODE_BOT ? "messages du bot" : "messages (tous auteurs)";
     const missingCount = Math.max(0, amount - candidates.length);
     const lines = [
-      `Suppression terminee: ${deletedCount} ${modeLabel} supprime(s).`,
+      `Suppression terminée : ${deletedCount} ${modeLabel} supprimé(s).`,
     ];
 
     if (tooOldCount > 0) {
-      lines.push(`${tooOldCount} ignore(s): plus de 14 jours.`);
+      lines.push(`${tooOldCount} ignoré(s) : plus de 14 jours.`);
     }
     if (missingCount > 0) {
-      lines.push(`${missingCount} non trouve(s) dans l'historique recent.`);
+      lines.push(`${missingCount} non trouvé(s) dans l'historique récent.`);
     }
 
     await interaction.editReply({ content: lines.join("\n") });
@@ -176,7 +176,7 @@ async function handleCleanCommand(interaction) {
     console.error("[AUTOMOD] /clean failed");
     console.error(error);
     await interaction.editReply({
-      content: "Erreur pendant la suppression. Reessaie dans un instant.",
+      content: "Erreur pendant la suppression. Réessaie dans un instant.",
     });
   }
 }
@@ -184,11 +184,11 @@ async function handleCleanCommand(interaction) {
 async function registerCommand(client) {
   const command = new SlashCommandBuilder()
     .setName(COMMAND_NAME)
-    .setDescription("Supprime des messages recents")
+    .setDescription("Supprime des messages récents")
     .addStringOption((option) =>
       option
         .setName("cible")
-        .setDescription("Choix des messages a supprimer")
+        .setDescription("Choix des messages à supprimer")
         .setRequired(true)
         .addChoices(
           { name: "Tous les messages", value: MODE_ALL },
@@ -198,7 +198,7 @@ async function registerCommand(client) {
     .addIntegerOption((option) =>
       option
         .setName("nombre")
-        .setDescription(`Nombre de messages (1 a ${MAX_DELETE})`)
+        .setDescription(`Nombre de messages (1 à ${MAX_DELETE})`)
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(MAX_DELETE)
@@ -210,7 +210,7 @@ async function registerCommand(client) {
     commandName: COMMAND_NAME,
     commandJson: command.toJSON(),
     logPrefix: "AUTOMOD",
-    missingGuildLog: "DISCORD_GUILD_ID absent, /clean non enregistre.",
+    missingGuildLog: "DISCORD_GUILD_ID absent, /clean non enregistré.",
   });
 }
 
