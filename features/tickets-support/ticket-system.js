@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const {
+  AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -21,6 +22,7 @@ const {
 
 const SUPPORT_CHANNEL_ID = "996446504199917668";
 const SUPPORT_TICKET_CATEGORY_ID = "1383247332908335207";
+const TICKET_ARCHIVE_CHANNEL_ID = "1473114020717400270";
 
 const OPEN_TICKET_SELECT_ID = "ticket_open_select";
 const TICKET_BUTTON_CLAIM_ID = "ticket_claim";
@@ -297,6 +299,163 @@ function isTicketStaff(interaction) {
       interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels) ||
       interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)
   );
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatDateTime(timestamp) {
+  if (!timestamp) {
+    return "-";
+  }
+  return new Date(timestamp).toISOString();
+}
+
+async function fetchAllMessages(channel) {
+  const all = [];
+  let before = undefined;
+
+  while (true) {
+    const batch = await channel.messages
+      .fetch({ limit: 100, before })
+      .catch(() => null);
+    if (!batch || batch.size === 0) {
+      break;
+    }
+
+    const entries = Array.from(batch.values());
+    all.push(...entries);
+
+    if (batch.size < 100) {
+      break;
+    }
+    before = entries[entries.length - 1]?.id;
+    if (!before) {
+      break;
+    }
+  }
+
+  return all.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+}
+
+function buildTranscriptHtml({ ticket, channel, messages, deletedBy }) {
+  const title = `Archive Ticket #${ticket.ticketNumber || "?"}`;
+  const rows = messages
+    .map((message) => {
+      const authorTag = `${message.author?.tag || "Inconnu"} (${message.author?.id || "-"})`;
+      const content = escapeHtml(message.content || "").replace(/\r?\n/g, "<br>");
+
+      const attachments = Array.from(message.attachments.values());
+      const attachmentHtml =
+        attachments.length > 0
+          ? `<div class=\"attachments\"><strong>Fichiers:</strong> ${attachments
+              .map((att) => `<a href=\"${escapeHtml(att.url)}\" target=\"_blank\">${escapeHtml(att.name || "fichier")}</a>`)
+              .join(" | ")}</div>`
+          : "";
+
+      const embeds = message.embeds || [];
+      const embedHtml =
+        embeds.length > 0
+          ? `<div class=\"embeds\"><strong>Embeds:</strong> ${embeds
+              .map((embed) => {
+                const parts = [];
+                if (embed.title) {
+                  parts.push(`<span class=\"embed-title\">${escapeHtml(embed.title)}</span>`);
+                }
+                if (embed.description) {
+                  parts.push(`<span>${escapeHtml(embed.description)}</span>`);
+                }
+                return parts.join(" - ");
+              })
+              .join("<br>")}</div>`
+          : "";
+
+      return `
+        <article class="msg">
+          <header>
+            <strong>${escapeHtml(authorTag)}</strong>
+            <span>${escapeHtml(formatDateTime(message.createdTimestamp))}</span>
+          </header>
+          <div class="content">${content || "<em>(message vide)</em>"}</div>
+          ${attachmentHtml}
+          ${embedHtml}
+        </article>
+      `;
+    })
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background:#0f1115; color:#f5f7ff; }
+    h1 { margin: 0 0 8px 0; }
+    .meta { margin-bottom: 20px; color: #c7cce0; }
+    .msg { border:1px solid #2a3145; border-left:4px solid #e11d48; padding:10px; margin: 10px 0; background:#161b26; border-radius:6px; }
+    .msg header { display:flex; justify-content:space-between; gap:8px; color:#aeb7d9; margin-bottom:8px; font-size: 13px; }
+    .content { white-space: normal; line-height: 1.45; }
+    .attachments, .embeds { margin-top:8px; font-size: 13px; color:#d7def8; }
+    a { color:#7cb3ff; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <div class="meta">
+    <div><strong>Salon:</strong> ${escapeHtml(channel.name)} (${escapeHtml(channel.id)})</div>
+    <div><strong>Propriétaire:</strong> ${escapeHtml(ticket.ownerId)}</div>
+    <div><strong>Raison:</strong> ${escapeHtml(ticket.reasonLabel || ticket.reasonValue || "-")}</div>
+    <div><strong>Créé le:</strong> ${escapeHtml(formatDateTime(ticket.createdAt))}</div>
+    <div><strong>Supprimé par:</strong> ${escapeHtml(deletedBy?.tag || "-")} (${escapeHtml(deletedBy?.id || "-")})</div>
+    <div><strong>Messages archivés:</strong> ${messages.length}</div>
+  </div>
+  ${rows || "<p>Aucun message à archiver.</p>"}
+</body>
+</html>`;
+}
+
+async function archiveTicketBeforeDelete(interaction, ticket) {
+  const archiveChannel = await fetchGuildTextChannel(
+    interaction.guild,
+    TICKET_ARCHIVE_CHANNEL_ID
+  );
+  if (!archiveChannel || archiveChannel.type !== ChannelType.GuildText) {
+    console.warn(
+      `[TICKET] Salon archive introuvable/invalide (${TICKET_ARCHIVE_CHANNEL_ID}).`
+    );
+    return false;
+  }
+
+  const messages = await fetchAllMessages(interaction.channel);
+  const html = buildTranscriptHtml({
+    ticket,
+    channel: interaction.channel,
+    messages,
+    deletedBy: interaction.user,
+  });
+
+  const fileName = `ticket-${ticket.ticketNumber || ticket.channelId}-${Date.now()}.html`;
+  const attachment = new AttachmentBuilder(Buffer.from(html, "utf8"), {
+    name: fileName,
+  });
+
+  await archiveChannel.send({
+    content:
+      `Archive ticket #${ticket.ticketNumber || "?"} - <#${ticket.channelId}> - ` +
+      `proprietaire <@${ticket.ownerId}>`,
+    files: [attachment],
+    allowedMentions: { parse: [] },
+  });
+
+  return true;
 }
 
 function sanitizeName(value) {
@@ -686,6 +845,13 @@ async function handleDelete(interaction, ticket) {
   if (!isTicketStaff(interaction)) {
     await replyEphemeral(interaction, "Seul un staff peut supprimer ce ticket.");
     return;
+  }
+
+  try {
+    await archiveTicketBeforeDelete(interaction, ticket);
+  } catch (error) {
+    console.error(`[TICKET] Echec archive ticket ${ticket.channelId}`);
+    console.error(error);
   }
 
   ticketStore.delete(ticket.channelId);
