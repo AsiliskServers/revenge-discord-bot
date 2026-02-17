@@ -34,15 +34,15 @@ const STATE_FILE = path.join(RUNTIME_DIR, "role-reaction-message.json");
 function buildEmbed() {
   return new EmbedBuilder()
     .setColor(0xe11d48)
-    .setTitle("__**❓ㆍÀ QUOI ÇA SERT ?**__")
+    .setTitle("__**❓**__ㆍ__**À QUOI ÇA SERT ?**__")
     .setDescription(
       "Ce système est un moyen automatisé vous permettant d'obtenir des rôles en réagissant à un message.\n\n" +
-        "🎭 Salons spécifiques\n" +
-        "Certains rôles vous donnent accès à des parties cachées du serveur.\n\n" +
-        "⚙️ Personnalisation\n" +
-        "Les utilisateurs peuvent choisir des rôles liés à leurs centres d’intérêt, mini-jeux, notifications, etc.\n\n" +
-        "👍 Gestion simplifiée\n" +
-        "Évite aux administrateurs de devoir attribuer manuellement les rôles à chaque membre."
+        "**🎭 Salons spécifiques**\n" +
+        "> Certains rôles vous donnent accès à des parties cachées du serveur.\n\n" +
+        "**⚙️ Personnalisation**\n" +
+        "> Les utilisateurs peuvent choisir des rôles liés à leurs centres d’intérêt, mini-jeux, notifications, etc.\n\n" +
+        "**👍 Gestion simplifiée**\n" +
+        "> Évite aux administrateurs de devoir attribuer manuellement les rôles à chaque membre."
     );
 }
 
