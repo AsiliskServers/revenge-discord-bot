@@ -54,10 +54,7 @@ function buildComponents() {
       .setLabel(item.label)
   );
 
-  return [
-    new ActionRowBuilder().addComponents(buttons.slice(0, 2)),
-    new ActionRowBuilder().addComponents(buttons.slice(2, 4)),
-  ];
+  return [new ActionRowBuilder().addComponents(buttons)];
 }
 
 function buildPayload() {
