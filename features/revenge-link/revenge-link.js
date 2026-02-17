@@ -1,4 +1,4 @@
-const fs = require("node:fs");
+﻿const fs = require("node:fs");
 const path = require("node:path");
 const {
   AttachmentBuilder,
@@ -32,6 +32,8 @@ const IMAGE_2_CANDIDATES = [
   path.join(__dirname, "image-second.png"),
 ];
 
+const MIDDLE_GIF_PATH = path.join(__dirname, "image.gif");
+
 function findFirstExistingFile(candidates) {
   for (const filePath of candidates) {
     if (fs.existsSync(filePath)) {
@@ -46,7 +48,7 @@ function buildLinkEmbed({ title, inviteUrl, imageAttachmentName }) {
     .setColor(0xe11d48)
     .setTitle(title)
     .setURL(inviteUrl)
-    .setDescription(`:discord_annonce:・[Clique ici pour rejoindre le serveur](${inviteUrl})`);
+    .setDescription(`➡️・[Clique ici pour rejoindre le serveur](${inviteUrl})`);
 
   if (imageAttachmentName) {
     embed.setImage(`attachment://${imageAttachmentName}`);
@@ -63,10 +65,16 @@ function buildPayload() {
 
   let image1Name = null;
   let image2Name = null;
+  let middleGifName = null;
 
   if (image1Path) {
     image1Name = path.basename(image1Path);
     files.push(new AttachmentBuilder(image1Path, { name: image1Name }));
+  }
+
+  if (fs.existsSync(MIDDLE_GIF_PATH)) {
+    middleGifName = path.basename(MIDDLE_GIF_PATH);
+    files.push(new AttachmentBuilder(MIDDLE_GIF_PATH, { name: middleGifName }));
   }
 
   if (image2Path) {
@@ -74,20 +82,29 @@ function buildPayload() {
     files.push(new AttachmentBuilder(image2Path, { name: image2Name }));
   }
 
+  const embeds = [
+    buildLinkEmbed({
+      title: "🗃️・REVENGE 🎯",
+      inviteUrl: INVITE_URL_1,
+      imageAttachmentName: image1Name,
+    }),
+  ];
+
+  if (middleGifName) {
+    embeds.push(new EmbedBuilder().setColor(0xe11d48).setImage(`attachment://${middleGifName}`));
+  }
+
+  embeds.push(
+    buildLinkEmbed({
+      title: "🗃️・REVENGE｜SkySword",
+      inviteUrl: INVITE_URL_2,
+      imageAttachmentName: image2Name,
+    })
+  );
+
   return {
     content: null,
-    embeds: [
-      buildLinkEmbed({
-        title: ":discord_logo:・REVENGE 🎯",
-        inviteUrl: INVITE_URL_1,
-        imageAttachmentName: image1Name,
-      }),
-      buildLinkEmbed({
-        title: ":discord_logo:・REVENGE｜SkySword",
-        inviteUrl: INVITE_URL_2,
-        imageAttachmentName: image2Name,
-      }),
-    ],
+    embeds,
     files,
     allowedMentions: { parse: [] },
   };
@@ -107,8 +124,8 @@ async function findExistingMessage(channel, botId) {
 
       const titles = message.embeds.map((embed) => embed.title || "");
       return (
-        titles.includes(":discord_logo:・REVENGE 🎯") &&
-        titles.includes(":discord_logo:・REVENGE｜SkySword")
+        titles.includes("🗃️・REVENGE 🎯") &&
+        titles.includes("🗃️・REVENGE｜SkySword")
       );
     }) || null
   );
