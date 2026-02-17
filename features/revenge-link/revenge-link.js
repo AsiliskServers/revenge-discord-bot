@@ -127,12 +127,12 @@ async function cleanupPreviousMessages(channel, botId) {
       return false;
     }
 
-      const descriptions = message.embeds.map((embed) => embed.description || "");
-      return (
-        descriptions.some((desc) => desc.includes(TITLE_1)) ||
-        descriptions.some((desc) => desc.includes(TITLE_2))
-      );
-    });
+    const descriptions = message.embeds.map((embed) => embed.description || "");
+    return (
+      descriptions.some((desc) => desc.includes(TITLE_1)) ||
+      descriptions.some((desc) => desc.includes(TITLE_2))
+    );
+  });
 
   if (legacyCombined) {
     await legacyCombined.delete().catch(() => null);

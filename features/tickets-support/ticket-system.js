@@ -26,6 +26,11 @@ const OPEN_TICKET_SELECT_ID = "ticket_open_select";
 const TICKET_BUTTON_CLAIM_ID = "ticket_claim";
 const TICKET_BUTTON_CLOSE_ID = "ticket_close";
 const TICKET_BUTTON_DELETE_ID = "ticket_delete";
+const TICKET_BUTTON_IDS = new Set([
+  TICKET_BUTTON_CLAIM_ID,
+  TICKET_BUTTON_CLOSE_ID,
+  TICKET_BUTTON_DELETE_ID,
+]);
 
 const RUNTIME_DIR = path.join(__dirname, ".runtime");
 const HUB_STATE_FILE = path.join(RUNTIME_DIR, "ticket-hub-message.json");
@@ -79,6 +84,14 @@ const ticketMeta = {
 };
 let missingImageWarned = false;
 let selectedImageWarned = false;
+
+async function replyEphemeral(interaction, content, extra = {}) {
+  await interaction.reply({
+    content,
+    flags: MessageFlags.Ephemeral,
+    ...extra,
+  });
+}
 
 function resolveHubImageFile() {
   for (const candidate of HUB_IMAGE_FILES) {
@@ -537,20 +550,14 @@ function canUseSupportSelectInChannel(interaction) {
 async function createTicketFromSelect(interaction) {
   const checkError = canUseSupportSelectInChannel(interaction);
   if (checkError) {
-    await interaction.reply({
-      content: checkError,
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, checkError);
     return;
   }
 
   const selectedReasonValue = interaction.values?.[0];
   const reason = getReasonData(selectedReasonValue);
   if (!reason) {
-    await interaction.reply({
-      content: "Raison de ticket invalide.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Raison de ticket invalide.");
     return;
   }
 
@@ -615,20 +622,9 @@ async function createTicketFromSelect(interaction) {
   }
 }
 
-async function setOwnerSendPermission(channel, ownerId, allowSend, reason) {
-  await channel.permissionOverwrites
-    .edit(ownerId, {
-      SendMessages: allowSend,
-    }, { reason })
-    .catch(() => null);
-}
-
 async function handleClaim(interaction, ticket) {
   if (!isTicketStaff(interaction)) {
-    await interaction.reply({
-      content: "Seul un staff peut claim ce ticket.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Seul un staff peut claim ce ticket.");
     return;
   }
 
@@ -636,10 +632,7 @@ async function handleClaim(interaction, ticket) {
     const claimBy = ticket.claimedById === interaction.user.id
       ? "Tu as deja claim ce ticket."
       : `Ticket deja claim par <@${ticket.claimedById}>.`;
-    await interaction.reply({
-      content: claimBy,
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, claimBy);
     return;
   }
 
@@ -658,30 +651,27 @@ async function handleClaim(interaction, ticket) {
 async function handleClose(interaction, ticket) {
   const isOwner = interaction.user.id === ticket.ownerId;
   if (!isOwner && !isTicketStaff(interaction)) {
-    await interaction.reply({
-      content: "Seul le createur du ticket ou un staff peut le fermer.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Seul le createur du ticket ou un staff peut le fermer.");
     return;
   }
 
   if (ticket.status === "closed") {
-    await interaction.reply({
-      content: "Ce ticket est deja ferme.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Ce ticket est deja ferme.");
     return;
   }
 
   ticket.status = "closed";
   saveTicketStore();
 
-  await setOwnerSendPermission(
-    interaction.channel,
-    ticket.ownerId,
-    false,
-    `Ticket ferme par ${interaction.user.tag}`
-  );
+  await interaction.channel.permissionOverwrites
+    .edit(
+      ticket.ownerId,
+      {
+        SendMessages: false,
+      },
+      { reason: `Ticket ferme par ${interaction.user.tag}` }
+    )
+    .catch(() => null);
 
   await interaction.deferUpdate();
   await updateTicketPanelMessage(interaction.client, ticket);
@@ -694,20 +684,14 @@ async function handleClose(interaction, ticket) {
 
 async function handleDelete(interaction, ticket) {
   if (!isTicketStaff(interaction)) {
-    await interaction.reply({
-      content: "Seul un staff peut supprimer ce ticket.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Seul un staff peut supprimer ce ticket.");
     return;
   }
 
   ticketStore.delete(ticket.channelId);
   saveTicketStore();
 
-  await interaction.reply({
-    content: "Suppression du ticket...",
-    flags: MessageFlags.Ephemeral,
-  });
+  await replyEphemeral(interaction, "Suppression du ticket...");
 
   await interaction.channel
     .delete(`Ticket supprime par ${interaction.user.tag}`)
@@ -717,10 +701,7 @@ async function handleDelete(interaction, ticket) {
 async function handleTicketButton(interaction) {
   const ticket = ticketStore.get(interaction.channelId);
   if (!ticket) {
-    await interaction.reply({
-      content: "Ticket introuvable ou deja supprime.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Ticket introuvable ou deja supprime.");
     return;
   }
 
@@ -766,11 +747,7 @@ module.exports = {
 
       if (
         interaction.isButton() &&
-        [
-          TICKET_BUTTON_CLAIM_ID,
-          TICKET_BUTTON_CLOSE_ID,
-          TICKET_BUTTON_DELETE_ID,
-        ].includes(interaction.customId)
+        TICKET_BUTTON_IDS.has(interaction.customId)
       ) {
         await handleTicketButton(interaction);
       }

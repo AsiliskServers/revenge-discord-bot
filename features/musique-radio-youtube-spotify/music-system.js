@@ -47,6 +47,7 @@ const YTDLP_BIN_PATH =
 const MUSIC_CACHE_DIR = path.join(__dirname, ".cache", "downloads");
 const MUSIC_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MUSIC_CACHE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const MIN_VALID_AUDIO_BYTES = 1024;
 
 const CONTROL_HANDLERS = [
   previousControl,
@@ -199,10 +200,23 @@ function getTrackCacheKey(track) {
   return createHash("sha1").update(String(track.url)).digest("hex").slice(0, 24);
 }
 
+function isUsableAudioFile(filePath) {
+  try {
+    const stats = fs.statSync(filePath);
+    return stats.isFile() && stats.size >= MIN_VALID_AUDIO_BYTES;
+  } catch {
+    return false;
+  }
+}
+
 function isFileFresh(filePath) {
   try {
     const stats = fs.statSync(filePath);
-    return Date.now() - stats.mtimeMs <= MUSIC_CACHE_TTL_MS;
+    return (
+      stats.isFile() &&
+      stats.size >= MIN_VALID_AUDIO_BYTES &&
+      Date.now() - stats.mtimeMs <= MUSIC_CACHE_TTL_MS
+    );
   } catch {
     return false;
   }
@@ -223,6 +237,24 @@ function findCachedFileByKey(cacheKey) {
   }
 
   return null;
+}
+
+function removeCachedFilesByKey(cacheKey) {
+  ensureMusicCacheDir();
+  const prefix = `${cacheKey}.`;
+  const entries = fs.readdirSync(MUSIC_CACHE_DIR, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.startsWith(prefix)) {
+      continue;
+    }
+
+    try {
+      fs.unlinkSync(path.join(MUSIC_CACHE_DIR, entry.name));
+    } catch {
+      // ignored
+    }
+  }
 }
 
 function cleanupExpiredDownloads() {
@@ -278,49 +310,73 @@ async function downloadTrackToCache(track) {
   }
 
   if (existing) {
-    try {
-      fs.unlinkSync(existing);
-    } catch {
-      // ignored
-    }
+    removeCachedFilesByKey(cacheKey);
   }
 
   const ytDlp = await ensureYtDlpWrap();
   const outputTemplate = path.join(MUSIC_CACHE_DIR, `${cacheKey}.%(ext)s`);
-  const rawOutput = await ytDlp.execPromise([
+  const baseArgs = [
     track.url,
-    "--extract-audio",
-    "--audio-format",
-    "opus",
-    "--audio-quality",
-    "0",
     "--no-playlist",
     "--quiet",
     "--no-warnings",
     "--no-progress",
+    "--retries",
+    "5",
+    "--fragment-retries",
+    "5",
     "--print",
     "after_move:filepath",
     "-o",
     outputTemplate,
-  ]);
+  ];
 
-  const printedPath = String(rawOutput)
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .reverse()
-    .find((line) => fs.existsSync(line));
+  const strategies = [
+    [
+      "--extract-audio",
+      "--audio-format",
+      "opus",
+      "--audio-quality",
+      "0",
+    ],
+    ["--format", "bestaudio/best"],
+  ];
 
-  if (printedPath) {
-    return printedPath;
+  let lastError = null;
+
+  for (const strategyArgs of strategies) {
+    try {
+      const rawOutput = await ytDlp.execPromise([...baseArgs, ...strategyArgs]);
+      const printedPath = String(rawOutput)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .reverse()
+        .find((line) => isUsableAudioFile(line));
+
+      if (printedPath) {
+        return printedPath;
+      }
+
+      const downloaded = findCachedFileByKey(cacheKey);
+      if (downloaded && isUsableAudioFile(downloaded)) {
+        return downloaded;
+      }
+
+      removeCachedFilesByKey(cacheKey);
+      throw new Error("Aucun fichier audio valide telecharge.");
+    } catch (error) {
+      lastError = error;
+      removeCachedFilesByKey(cacheKey);
+      console.warn(
+        `[MUSIC] yt-dlp strategy failed for ${track.url}: ${error?.message || error}`
+      );
+    }
   }
 
-  const downloaded = findCachedFileByKey(cacheKey);
-  if (downloaded && fs.existsSync(downloaded)) {
-    return downloaded;
-  }
-
-  throw new Error("Echec du telechargement audio yt-dlp.");
+  throw new Error(
+    `Echec du telechargement audio yt-dlp. ${lastError?.message || ""}`.trim()
+  );
 }
 
 async function ensureTrackCached(track) {
@@ -621,12 +677,12 @@ async function ensureVoiceConnection(state, voiceChannel) {
 }
 
 async function playTrack(state, track, storeCurrentInHistory) {
+  cleanupCurrentAudioProcess(state);
+  const resource = await buildYtDlpResource(track, state);
+
   if (storeCurrentInHistory && state.current) {
     state.history.push(state.current);
   }
-
-  cleanupCurrentAudioProcess(state);
-  const resource = await buildYtDlpResource(track, state);
 
   state.current = track;
   state.player.play(resource);
@@ -639,8 +695,13 @@ async function playNextTrack(state) {
   }
 
   const nextTrack = state.queue.shift();
-  await playTrack(state, nextTrack, Boolean(state.current));
-  return true;
+  try {
+    await playTrack(state, nextTrack, Boolean(state.current));
+    return true;
+  } catch (error) {
+    state.queue.unshift(nextTrack);
+    throw error;
+  }
 }
 
 async function playPreviousTrack(state) {
@@ -648,13 +709,23 @@ async function playPreviousTrack(state) {
     return false;
   }
 
-  const previousTrack = state.history.pop();
-  if (state.current) {
-    state.queue.unshift(state.current);
+  const previousTrack = state.history[state.history.length - 1];
+  const currentTrack = state.current || null;
+
+  if (currentTrack) {
+    state.queue.unshift(currentTrack);
   }
 
-  await playTrack(state, previousTrack, false);
-  return true;
+  try {
+    await playTrack(state, previousTrack, false);
+    state.history.pop();
+    return true;
+  } catch (error) {
+    if (currentTrack && state.queue[0] === currentTrack) {
+      state.queue.shift();
+    }
+    throw error;
+  }
 }
 
 async function replayCurrentTrack(state) {

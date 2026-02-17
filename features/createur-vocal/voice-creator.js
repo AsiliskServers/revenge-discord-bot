@@ -18,6 +18,7 @@ const {
 const VOICE_CREATOR_CHANNEL_ID = "1473103122321903789";
 const VOICE_TARGET_CATEGORY_ID = "1382993339728789595";
 const EMPTY_DELETE_DELAY_MS = 5000;
+const TEMP_VOICE_NAME_PREFIX = "🔊・Salon de ";
 
 const PANEL_BTN_OPEN = "vc_panel_open";
 const PANEL_BTN_CLOSED = "vc_panel_closed";
@@ -26,6 +27,15 @@ const PANEL_BTN_MIC = "vc_panel_mic";
 const PANEL_BTN_VIDEO = "vc_panel_video";
 const PANEL_BTN_LIMIT = "vc_panel_limit";
 const PANEL_BTN_TRANSFER = "vc_panel_transfer";
+const PANEL_BUTTON_IDS = new Set([
+  PANEL_BTN_OPEN,
+  PANEL_BTN_CLOSED,
+  PANEL_BTN_PRIVATE,
+  PANEL_BTN_MIC,
+  PANEL_BTN_VIDEO,
+  PANEL_BTN_LIMIT,
+  PANEL_BTN_TRANSFER,
+]);
 
 const LIMIT_MODAL_PREFIX = "vc_limit_modal:";
 const TRANSFER_MODAL_PREFIX = "vc_transfer_modal:";
@@ -38,16 +48,12 @@ const MODE_PRIVATE = "private";
 
 const tempVoiceStateByChannelId = new Map();
 
-function sanitizeName(value) {
-  const safe = String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-
-  return safe || "vocal";
+async function replyEphemeral(interaction, content, extra = {}) {
+  await interaction.reply({
+    content,
+    flags: MessageFlags.Ephemeral,
+    ...extra,
+  });
 }
 
 function getModeLabel(mode) {
@@ -285,25 +291,40 @@ function clearDeleteTimer(state) {
   state.deleteTimer = null;
 }
 
-function isTempManagedChannel(channelId) {
-  return tempVoiceStateByChannelId.has(channelId);
+function ensureTempState(channelId) {
+  const existing = tempVoiceStateByChannelId.get(channelId);
+  if (existing) {
+    return existing;
+  }
+
+  const fallback = {
+    ownerId: null,
+    mode: MODE_OPEN,
+    micBlocked: false,
+    videoBlocked: false,
+    userLimit: 0,
+    panelMessageId: null,
+    deleteTimer: null,
+  };
+  tempVoiceStateByChannelId.set(channelId, fallback);
+  return fallback;
+}
+
+function isManagedTempVoiceChannel(channel) {
+  if (!channel || channel.type !== ChannelType.GuildVoice) {
+    return false;
+  }
+
+  return (
+    tempVoiceStateByChannelId.has(channel.id) ||
+    (channel.parentId === VOICE_TARGET_CATEGORY_ID &&
+      channel.name.startsWith(TEMP_VOICE_NAME_PREFIX))
+  );
 }
 
 async function scheduleDeleteIfEmpty(channelId, guild) {
-  const state = tempVoiceStateByChannelId.get(channelId);
-  if (!state) {
-    return;
-  }
+  const state = ensureTempState(channelId);
   if (state.deleteTimer) {
-    return;
-  }
-
-  const channel = await guild.channels.fetch(channelId).catch(() => null);
-  if (!channel || channel.type !== ChannelType.GuildVoice) {
-    tempVoiceStateByChannelId.delete(channelId);
-    return;
-  }
-  if (channel.members.size > 0) {
     return;
   }
 
@@ -312,6 +333,7 @@ async function scheduleDeleteIfEmpty(channelId, guild) {
     if (!latest) {
       return;
     }
+    latest.deleteTimer = null;
 
     const freshChannel = await guild.channels.fetch(channelId).catch(() => null);
     if (!freshChannel || freshChannel.type !== ChannelType.GuildVoice) {
@@ -320,12 +342,16 @@ async function scheduleDeleteIfEmpty(channelId, guild) {
     }
 
     if (freshChannel.members.size > 0) {
-      latest.deleteTimer = null;
       return;
     }
 
-    tempVoiceStateByChannelId.delete(channelId);
-    await freshChannel.delete("Salon vocal temporaire vide (auto-clean)").catch(() => null);
+    try {
+      await freshChannel.delete("Salon vocal temporaire vide (auto-clean)");
+      tempVoiceStateByChannelId.delete(channelId);
+    } catch (error) {
+      console.error(`[VOICE CREATOR] Echec suppression salon vide ${channelId}`);
+      console.error(error);
+    }
   }, EMPTY_DELETE_DELAY_MS);
 }
 
@@ -384,13 +410,12 @@ function buildTransferModal(channelId) {
 
 async function createTempVoiceForMember(member) {
   const guild = member.guild;
-  const prefix = "🔊・Salon de ";
   const rawMemberName = String(member.displayName || member.user.username || "Membre")
     .replace(/\s+/g, " ")
     .trim();
-  const maxNameLength = Math.max(1, 100 - prefix.length);
+  const maxNameLength = Math.max(1, 100 - TEMP_VOICE_NAME_PREFIX.length);
   const clippedMemberName = rawMemberName.slice(0, maxNameLength) || "Membre";
-  const channelName = `${prefix}${clippedMemberName}`;
+  const channelName = `${TEMP_VOICE_NAME_PREFIX}${clippedMemberName}`;
 
   const state = {
     ownerId: member.id,
@@ -451,53 +476,39 @@ async function handleToggleVideo(interaction, state) {
 async function handlePanelButton(interaction) {
   const state = tempVoiceStateByChannelId.get(interaction.channelId);
   if (!state) {
-    await interaction.reply({
-      content: "Ce panneau n'est plus actif.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Ce panneau n'est plus actif.");
     return;
   }
 
   if (!canManageVoicePanel(interaction, state)) {
-    await interaction.reply({
-      content: "Seul le proprietaire du salon peut utiliser ce panneau.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Seul le proprietaire du salon peut utiliser ce panneau.");
     return;
   }
 
-  if (interaction.customId === PANEL_BTN_OPEN) {
-    await handleModeAction(interaction, state, MODE_OPEN);
-    return;
-  }
-
-  if (interaction.customId === PANEL_BTN_CLOSED) {
-    await handleModeAction(interaction, state, MODE_CLOSED);
-    return;
-  }
-
-  if (interaction.customId === PANEL_BTN_PRIVATE) {
-    await handleModeAction(interaction, state, MODE_PRIVATE);
-    return;
-  }
-
-  if (interaction.customId === PANEL_BTN_MIC) {
-    await handleToggleMic(interaction, state);
-    return;
-  }
-
-  if (interaction.customId === PANEL_BTN_VIDEO) {
-    await handleToggleVideo(interaction, state);
-    return;
-  }
-
-  if (interaction.customId === PANEL_BTN_LIMIT) {
-    await interaction.showModal(buildLimitModal(interaction.channelId, state.userLimit));
-    return;
-  }
-
-  if (interaction.customId === PANEL_BTN_TRANSFER) {
-    await interaction.showModal(buildTransferModal(interaction.channelId));
+  switch (interaction.customId) {
+    case PANEL_BTN_OPEN:
+      await handleModeAction(interaction, state, MODE_OPEN);
+      return;
+    case PANEL_BTN_CLOSED:
+      await handleModeAction(interaction, state, MODE_CLOSED);
+      return;
+    case PANEL_BTN_PRIVATE:
+      await handleModeAction(interaction, state, MODE_PRIVATE);
+      return;
+    case PANEL_BTN_MIC:
+      await handleToggleMic(interaction, state);
+      return;
+    case PANEL_BTN_VIDEO:
+      await handleToggleVideo(interaction, state);
+      return;
+    case PANEL_BTN_LIMIT:
+      await interaction.showModal(buildLimitModal(interaction.channelId, state.userLimit));
+      return;
+    case PANEL_BTN_TRANSFER:
+      await interaction.showModal(buildTransferModal(interaction.channelId));
+      return;
+    default:
+      return;
   }
 }
 
@@ -505,45 +516,30 @@ async function handleLimitModal(interaction) {
   const channelId = interaction.customId.slice(LIMIT_MODAL_PREFIX.length);
   const state = tempVoiceStateByChannelId.get(channelId);
   if (!state) {
-    await interaction.reply({
-      content: "Salon temporaire introuvable.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Salon temporaire introuvable.");
     return;
   }
 
   if (!canManageVoicePanel(interaction, state)) {
-    await interaction.reply({
-      content: "Action reservee au proprietaire.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Action reservee au proprietaire.");
     return;
   }
 
   const rawValue = interaction.fields.getTextInputValue(LIMIT_FIELD_ID).trim();
   if (!/^\d{1,2}$/.test(rawValue)) {
-    await interaction.reply({
-      content: "Entre une valeur numerique entre 0 et 99.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Entre une valeur numerique entre 0 et 99.");
     return;
   }
 
   const limit = Number(rawValue);
   if (!Number.isInteger(limit) || limit < 0 || limit > 99) {
-    await interaction.reply({
-      content: "La limite doit etre entre 0 et 99.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "La limite doit etre entre 0 et 99.");
     return;
   }
 
   const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
   if (!channel || channel.type !== ChannelType.GuildVoice) {
-    await interaction.reply({
-      content: "Salon vocal introuvable.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Salon vocal introuvable.");
     return;
   }
 
@@ -551,64 +547,43 @@ async function handleLimitModal(interaction) {
   await channel.setUserLimit(limit, `Limite modifiee par ${interaction.user.tag}`).catch(() => null);
   await ensurePanelMessage(channel, state);
 
-  await interaction.reply({
-    content: `Limite mise a jour: ${limit === 0 ? "illimite" : limit}.`,
-    flags: MessageFlags.Ephemeral,
-  });
+  await replyEphemeral(interaction, `Limite mise a jour: ${limit === 0 ? "illimite" : limit}.`);
 }
 
 async function handleTransferModal(interaction) {
   const channelId = interaction.customId.slice(TRANSFER_MODAL_PREFIX.length);
   const state = tempVoiceStateByChannelId.get(channelId);
   if (!state) {
-    await interaction.reply({
-      content: "Salon temporaire introuvable.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Salon temporaire introuvable.");
     return;
   }
 
   if (!canManageVoicePanel(interaction, state)) {
-    await interaction.reply({
-      content: "Action reservee au proprietaire.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Action reservee au proprietaire.");
     return;
   }
 
   const rawTarget = interaction.fields.getTextInputValue(TRANSFER_FIELD_ID);
   const targetUserId = parseUserId(rawTarget);
   if (!targetUserId) {
-    await interaction.reply({
-      content: "Mention ou ID invalide.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Mention ou ID invalide.");
     return;
   }
 
   const member = await interaction.guild.members.fetch(targetUserId).catch(() => null);
   if (!member) {
-    await interaction.reply({
-      content: "Membre introuvable sur ce serveur.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Membre introuvable sur ce serveur.");
     return;
   }
 
   if (member.user.bot) {
-    await interaction.reply({
-      content: "Impossible de transferer a un bot.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Impossible de transferer a un bot.");
     return;
   }
 
   const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
   if (!channel || channel.type !== ChannelType.GuildVoice) {
-    await interaction.reply({
-      content: "Salon vocal introuvable.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Salon vocal introuvable.");
     return;
   }
 
@@ -616,10 +591,8 @@ async function handleTransferModal(interaction) {
   await applyVoicePermissions(channel, state, `Propriete transferee par ${interaction.user.tag}`);
   await ensurePanelMessage(channel, state);
 
-  await interaction.reply({
-    content: `Propriete transferee a <@${member.id}>.`,
+  await replyEphemeral(interaction, `Propriete transferee a <@${member.id}>.`, {
     allowedMentions: { users: [member.id], parse: [] },
-    flags: MessageFlags.Ephemeral,
   });
 }
 
@@ -640,12 +613,12 @@ async function handleVoiceStateUpdate(oldState, newState) {
     return;
   }
 
-  if (oldState.channelId && isTempManagedChannel(oldState.channelId)) {
-    await scheduleDeleteIfEmpty(oldState.channelId, oldState.guild);
+  if (oldState.channel && isManagedTempVoiceChannel(oldState.channel)) {
+    await scheduleDeleteIfEmpty(oldState.channel.id, oldState.guild);
   }
 
-  if (newState.channelId && isTempManagedChannel(newState.channelId)) {
-    const state = tempVoiceStateByChannelId.get(newState.channelId);
+  if (newState.channel && isManagedTempVoiceChannel(newState.channel)) {
+    const state = ensureTempState(newState.channel.id);
     clearDeleteTimer(state);
   }
 }
@@ -680,15 +653,7 @@ module.exports = {
     client.on("interactionCreate", async (interaction) => {
       if (
         interaction.isButton() &&
-        [
-          PANEL_BTN_OPEN,
-          PANEL_BTN_CLOSED,
-          PANEL_BTN_PRIVATE,
-          PANEL_BTN_MIC,
-          PANEL_BTN_VIDEO,
-          PANEL_BTN_LIMIT,
-          PANEL_BTN_TRANSFER,
-        ].includes(interaction.customId)
+        PANEL_BUTTON_IDS.has(interaction.customId)
       ) {
         await handlePanelButton(interaction);
         return;
