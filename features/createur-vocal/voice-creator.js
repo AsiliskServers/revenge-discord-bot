@@ -384,8 +384,13 @@ function buildTransferModal(channelId) {
 
 async function createTempVoiceForMember(member) {
   const guild = member.guild;
-  const baseName = sanitizeName(member.displayName || member.user.username).slice(0, 50);
-  const channelName = `${baseName}-vocal`;
+  const prefix = "🔊・Salon de ";
+  const rawMemberName = String(member.displayName || member.user.username || "Membre")
+    .replace(/\s+/g, " ")
+    .trim();
+  const maxNameLength = Math.max(1, 100 - prefix.length);
+  const clippedMemberName = rawMemberName.slice(0, maxNameLength) || "Membre";
+  const channelName = `${prefix}${clippedMemberName}`;
 
   const state = {
     ownerId: member.id,
