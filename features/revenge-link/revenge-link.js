@@ -91,52 +91,11 @@ function buildGifPayload(gifPath) {
   };
 }
 
-async function deleteMessageIfExists(channel, messageId) {
+async function fetchMessageById(channel, messageId) {
   if (!messageId) {
-    return;
+    return null;
   }
-
-  const message = await channel.messages.fetch(messageId).catch(() => null);
-  if (!message) {
-    return;
-  }
-
-  await message.delete().catch(() => null);
-}
-
-async function cleanupPreviousMessages(channel, botId) {
-  const state = readJsonFile(STATE_FILE, null);
-
-  if (state?.messageId) {
-    await deleteMessageIfExists(channel, state.messageId);
-  }
-
-  if (Array.isArray(state?.messageIds)) {
-    for (const messageId of state.messageIds) {
-      await deleteMessageIfExists(channel, messageId);
-    }
-  }
-
-  const messages = await channel.messages.fetch({ limit: 75 }).catch(() => null);
-  if (!messages) {
-    return;
-  }
-
-  const legacyCombined = messages.find((message) => {
-    if (message.author?.id !== botId) {
-      return false;
-    }
-
-    const descriptions = message.embeds.map((embed) => embed.description || "");
-    return (
-      descriptions.some((desc) => desc.includes(TITLE_1)) ||
-      descriptions.some((desc) => desc.includes(TITLE_2))
-    );
-  });
-
-  if (legacyCombined) {
-    await legacyCombined.delete().catch(() => null);
-  }
+  return channel.messages.fetch(messageId).catch(() => null);
 }
 
 async function ensureRevengeLinkMessage(client) {
@@ -151,28 +110,24 @@ async function ensureRevengeLinkMessage(client) {
     return;
   }
 
-  await cleanupPreviousMessages(channel, client.user.id);
-
   const thumbnail1Path = findFirstExistingFile(THUMBNAIL_1_CANDIDATES);
   const thumbnail2Path = findFirstExistingFile(THUMBNAIL_2_CANDIDATES);
   const gifPath = fs.existsSync(MIDDLE_GIF_PATH) ? MIDDLE_GIF_PATH : null;
-
-  const firstMessage = await channel.send(
+  const gifPayload = buildGifPayload(gifPath);
+  const payloads = [
     buildLinkPayload({
       title: TITLE_1,
       inviteUrl: INVITE_URL_1,
       thumbnailPath: thumbnail1Path,
       color: 0xe11d48,
-    })
-  );
+    }),
+  ];
 
-  let gifMessage = null;
-  const gifPayload = buildGifPayload(gifPath);
   if (gifPayload) {
-    gifMessage = await channel.send(gifPayload);
+    payloads.push(gifPayload);
   }
 
-  const secondMessage = await channel.send(
+  payloads.push(
     buildLinkPayload({
       title: TITLE_2,
       inviteUrl: INVITE_URL_2,
@@ -181,7 +136,39 @@ async function ensureRevengeLinkMessage(client) {
     })
   );
 
-  const messageIds = [firstMessage.id, gifMessage?.id, secondMessage.id].filter(Boolean);
+  const state = readJsonFile(STATE_FILE, null);
+  if (
+    state &&
+    state.guildId === channel.guild.id &&
+    state.channelId === channel.id &&
+    Array.isArray(state.messageIds) &&
+    state.messageIds.length === payloads.length
+  ) {
+    const messages = [];
+    for (const messageId of state.messageIds) {
+      const message = await fetchMessageById(channel, messageId);
+      if (!message || message.author?.id !== client.user.id) {
+        messages.length = 0;
+        break;
+      }
+      messages.push(message);
+    }
+
+    if (messages.length === payloads.length) {
+      for (let i = 0; i < messages.length; i += 1) {
+        await messages[i].edit(payloads[i]).catch(() => null);
+      }
+      return;
+    }
+  }
+
+  const sentMessages = [];
+  for (const payload of payloads) {
+    const sent = await channel.send(payload);
+    sentMessages.push(sent);
+  }
+
+  const messageIds = sentMessages.map((message) => message.id);
   writeJsonFile(STATE_FILE, {
     guildId: channel.guild.id,
     channelId: channel.id,
