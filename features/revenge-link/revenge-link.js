@@ -16,8 +16,8 @@ const {
 const TARGET_CHANNEL_ID = "1349631503730212965";
 const INVITE_URL_1 = "https://discord.gg/mv9jUbTWxh";
 const INVITE_URL_2 = "https://discord.gg/tcNhANtj28";
-const TITLE_1 = "🗃️・REVENGE";
-const TITLE_2 = "🗃️・REVENGE｜SkySword";
+const TITLE_1 = "🗃️・__**REVENGE 🎯**__";
+const TITLE_2 = "🗃️・__**REVENGE｜SkySword**__";
 
 const RUNTIME_DIR = path.join(__dirname, ".runtime");
 const STATE_FILE = path.join(RUNTIME_DIR, "revenge-link-message.json");
@@ -46,8 +46,7 @@ function findFirstExistingFile(candidates) {
 function buildLinkEmbed({ title, inviteUrl, thumbnailAttachmentName }) {
   const embed = new EmbedBuilder()
     .setColor(0xe11d48)
-    .setTitle(title)
-    .setDescription(`\n➡️ ・ [Clique ici pour rejoindre le serveur](${inviteUrl})`);
+    .setDescription(`${title}\n\n➡️ ・ [Clique ici pour rejoindre le serveur](${inviteUrl})`);
 
   if (thumbnailAttachmentName) {
     embed.setThumbnail(`attachment://${thumbnailAttachmentName}`);
@@ -127,10 +126,10 @@ async function cleanupPreviousMessages(channel, botId) {
       return false;
     }
 
-      const titles = message.embeds.map((embed) => embed.title || "");
+      const descriptions = message.embeds.map((embed) => embed.description || "");
       return (
-        titles.includes(TITLE_1) &&
-        titles.includes(TITLE_2)
+        descriptions.some((desc) => desc.includes(TITLE_1)) ||
+        descriptions.some((desc) => desc.includes(TITLE_2))
       );
     });
 
