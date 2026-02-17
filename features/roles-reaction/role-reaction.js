@@ -20,10 +20,10 @@ const TARGET_CHANNEL_ID = "1470813116395946229";
 const BUTTON_PREFIX = "role_reaction:";
 
 const ROLE_OPTIONS = [
-  { key: "giveaways", label: "🎁┃Giveaways", roleId: "1379156738346848297" },
-  { key: "annonces", label: "📢┃Annonces", roleId: "1472050708474761502" },
-  { key: "sondages", label: "📊┃Sondages", roleId: "1472050709158432862" },
-  { key: "events", label: "🎉┃Événements", roleId: "1472050710186033254" },
+  { key: "giveaways", label: "🎁Giveaways", roleId: "1379156738346848297" },
+  { key: "annonces", label: "📢Annonces", roleId: "1472050708474761502" },
+  { key: "sondages", label: "📊Sondages", roleId: "1472050709158432862" },
+  { key: "events", label: "🎉Événements", roleId: "1472050710186033254" },
 ];
 
 const ROLE_BY_KEY = new Map(ROLE_OPTIONS.map((item) => [item.key, item]));
