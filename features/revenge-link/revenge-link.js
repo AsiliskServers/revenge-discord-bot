@@ -43,9 +43,9 @@ function findFirstExistingFile(candidates) {
   return null;
 }
 
-function buildLinkEmbed({ title, inviteUrl, thumbnailAttachmentName }) {
+function buildLinkEmbed({ title, inviteUrl, thumbnailAttachmentName, color }) {
   const embed = new EmbedBuilder()
-    .setColor(0xe11d48)
+    .setColor(color ?? 0xe11d48)
     .setDescription(`${title}\n\n➡️ ・ [Clique ici pour rejoindre le serveur](${inviteUrl})`);
 
   if (thumbnailAttachmentName) {
@@ -55,7 +55,7 @@ function buildLinkEmbed({ title, inviteUrl, thumbnailAttachmentName }) {
   return embed;
 }
 
-function buildLinkPayload({ title, inviteUrl, thumbnailPath }) {
+function buildLinkPayload({ title, inviteUrl, thumbnailPath, color }) {
   const files = [];
   let thumbnailAttachmentName = null;
 
@@ -71,6 +71,7 @@ function buildLinkPayload({ title, inviteUrl, thumbnailPath }) {
         title,
         inviteUrl,
         thumbnailAttachmentName,
+        color,
       }),
     ],
     files,
@@ -161,6 +162,7 @@ async function ensureRevengeLinkMessage(client) {
       title: TITLE_1,
       inviteUrl: INVITE_URL_1,
       thumbnailPath: thumbnail1Path,
+      color: 0xe11d48,
     })
   );
 
@@ -175,6 +177,7 @@ async function ensureRevengeLinkMessage(client) {
       title: TITLE_2,
       inviteUrl: INVITE_URL_2,
       thumbnailPath: thumbnail2Path,
+      color: 0x22c55e,
     })
   );
 
