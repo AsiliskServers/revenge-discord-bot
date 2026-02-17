@@ -16,8 +16,8 @@ const {
 const TARGET_CHANNEL_ID = "1349631503730212965";
 const INVITE_URL_1 = "https://discord.gg/mv9jUbTWxh";
 const INVITE_URL_2 = "https://discord.gg/tcNhANtj28";
-const TITLE_1 = "🗃️・__**REVENGE**__";
-const TITLE_2 = "🗃️・__**REVENGE｜SkySword**__";
+const TITLE_1 = "🗃️・REVENGE";
+const TITLE_2 = "🗃️・REVENGE｜SkySword";
 
 const RUNTIME_DIR = path.join(__dirname, ".runtime");
 const STATE_FILE = path.join(RUNTIME_DIR, "revenge-link-message.json");
