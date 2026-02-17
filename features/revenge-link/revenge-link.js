@@ -47,7 +47,6 @@ function buildLinkEmbed({ title, inviteUrl, thumbnailAttachmentName }) {
   const embed = new EmbedBuilder()
     .setColor(0xe11d48)
     .setTitle(title)
-    .setURL(inviteUrl)
     .setDescription(`\n\n➡️ ・ [Clique ici pour rejoindre le serveur](${inviteUrl})\n`);
 
   if (thumbnailAttachmentName) {
