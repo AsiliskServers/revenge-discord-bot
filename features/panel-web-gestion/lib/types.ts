@@ -1,6 +1,7 @@
 ﻿export const FEATURE_KEY_ROLES_REACTION = "roles-reaction";
 export const FEATURE_KEY_VOICE_CREATOR = "voice-creator";
 export const FEATURE_KEY_POLL_SYSTEM = "poll-system";
+export const FEATURE_KEY_WELCOME_MESSAGE = "welcome-message";
 
 export type RoleReactionEntry = {
   key: string;
@@ -23,6 +24,11 @@ export type VoiceCreatorFeatureConfig = {
 export type PollSystemFeatureConfig = {
   channelId: string;
   maxActiveSuggestionsPerUser: number;
+};
+
+export type WelcomeMessageFeatureConfig = {
+  channelId: string;
+  titleTargetChannelId: string;
 };
 
 export type FeatureRecord<TConfig> = {
@@ -53,4 +59,9 @@ export const DEFAULT_VOICE_CREATOR_CONFIG: VoiceCreatorFeatureConfig = {
 export const DEFAULT_POLL_SYSTEM_CONFIG: PollSystemFeatureConfig = {
   channelId: "1472915570935726242",
   maxActiveSuggestionsPerUser: 2,
+};
+
+export const DEFAULT_WELCOME_MESSAGE_CONFIG: WelcomeMessageFeatureConfig = {
+  channelId: "996443449744167073",
+  titleTargetChannelId: "1349631503730212965",
 };

@@ -1,17 +1,20 @@
-import { PoolClient } from "pg";
+﻿import { PoolClient } from "pg";
 import { ensurePanelSchema, getPool } from "@/lib/db";
 import {
   DEFAULT_POLL_SYSTEM_CONFIG,
   DEFAULT_ROLE_REACTION_CONFIG,
   DEFAULT_VOICE_CREATOR_CONFIG,
+  DEFAULT_WELCOME_MESSAGE_CONFIG,
   FEATURE_KEY_POLL_SYSTEM,
   FEATURE_KEY_ROLES_REACTION,
   FEATURE_KEY_VOICE_CREATOR,
+  FEATURE_KEY_WELCOME_MESSAGE,
   FeatureRecord,
   PollSystemFeatureConfig,
   RoleReactionEntry,
   RoleReactionFeatureConfig,
   VoiceCreatorFeatureConfig,
+  WelcomeMessageFeatureConfig,
 } from "@/lib/types";
 
 function asString(value: unknown, fallback = ""): string {
@@ -28,14 +31,15 @@ function normalizeEnabled(value: unknown, fallback = true): boolean {
 
 function sanitizeRoleEntry(input: unknown, index: number): RoleReactionEntry {
   const source = (input || {}) as Partial<RoleReactionEntry>;
-  const key = asString(source.key, `role_${index + 1}`)
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "") || `role_${index + 1}`;
+  const key =
+    asString(source.key, `role_${index + 1}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "") || `role_${index + 1}`;
 
   return {
     key,
-    label: asString(source.label, `Rôle ${index + 1}`),
+    label: asString(source.label, `Role ${index + 1}`),
     roleId: asString(source.roleId),
   };
 }
@@ -69,13 +73,13 @@ export function normalizeVoiceCreatorConfig(input: unknown): VoiceCreatorFeature
     DEFAULT_VOICE_CREATOR_CONFIG.tempVoiceNamePrefix
   );
   const trimmedPrefix = rawPrefix.trim();
-  const tempVoiceNamePrefix = trimmedPrefix.length > 0 ? trimmedPrefix : "";
+  const normalizedPrefix = trimmedPrefix.length > 0 ? trimmedPrefix : "";
   const prefixWithSpace =
-    tempVoiceNamePrefix.length === 0
+    normalizedPrefix.length === 0
       ? DEFAULT_VOICE_CREATOR_CONFIG.tempVoiceNamePrefix
-      : /\s$/.test(tempVoiceNamePrefix)
-        ? tempVoiceNamePrefix
-        : `${tempVoiceNamePrefix} `;
+      : /\s$/.test(normalizedPrefix)
+        ? normalizedPrefix
+        : `${normalizedPrefix} `;
 
   return {
     creatorChannelId: asString(
@@ -105,6 +109,18 @@ export function normalizePollSystemConfig(input: unknown): PollSystemFeatureConf
   return {
     channelId: asString(source.channelId, DEFAULT_POLL_SYSTEM_CONFIG.channelId),
     maxActiveSuggestionsPerUser,
+  };
+}
+
+export function normalizeWelcomeMessageConfig(input: unknown): WelcomeMessageFeatureConfig {
+  const source = (input || {}) as Partial<WelcomeMessageFeatureConfig>;
+
+  return {
+    channelId: asString(source.channelId, DEFAULT_WELCOME_MESSAGE_CONFIG.channelId),
+    titleTargetChannelId: asString(
+      source.titleTargetChannelId,
+      DEFAULT_WELCOME_MESSAGE_CONFIG.titleTargetChannelId
+    ),
   };
 }
 
@@ -274,6 +290,37 @@ export async function savePollSystemRecord({
     config,
     updatedBy,
     normalizeConfig: normalizePollSystemConfig,
+  });
+}
+
+export async function getWelcomeMessageRecord(
+  guildId: string
+): Promise<FeatureRecord<WelcomeMessageFeatureConfig>> {
+  return getFeatureRecord({
+    guildId,
+    featureKey: FEATURE_KEY_WELCOME_MESSAGE,
+    normalizeConfig: normalizeWelcomeMessageConfig,
+  });
+}
+
+export async function saveWelcomeMessageRecord({
+  guildId,
+  enabled,
+  config,
+  updatedBy,
+}: {
+  guildId: string;
+  enabled: boolean;
+  config: WelcomeMessageFeatureConfig;
+  updatedBy: string;
+}): Promise<FeatureRecord<WelcomeMessageFeatureConfig>> {
+  return saveFeatureRecord({
+    guildId,
+    featureKey: FEATURE_KEY_WELCOME_MESSAGE,
+    enabled,
+    config,
+    updatedBy,
+    normalizeConfig: normalizeWelcomeMessageConfig,
   });
 }
 
