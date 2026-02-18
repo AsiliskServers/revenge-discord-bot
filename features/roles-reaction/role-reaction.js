@@ -343,7 +343,10 @@ async function handleRoleButton(interaction) {
   runtime.configByGuild.set(interaction.guildId, config);
 
   if (!config.enabled) {
-    await replyEphemeral(interaction, "La feature Roles Reaction est désactivée.");
+    await replyEphemeral(
+      interaction,
+      "La fonctionnalité Roles Reaction est actuellement désactivée. Merci de contacter un administrateur."
+    );
     return;
   }
 
