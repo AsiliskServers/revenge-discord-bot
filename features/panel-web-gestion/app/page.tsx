@@ -21,18 +21,18 @@ export default function HomePage() {
         <p>panel-revenge.asilisk.fr</p>
         <nav>
           <a className="active" href="#roles-reaction">
-            Roles Reaction
+            Rôles réactions
           </a>
         </nav>
       </aside>
 
       <section className="content" id="roles-reaction">
         <header className="content-header">
-          <h2>Gestion des Features</h2>
-          <p>Version MVP branchee PostgreSQL + Redis pour le pilotage a chaud.</p>
+          <h2>Gestion des fonctionnalités</h2>
+          <p>Version MVP connectée à PostgreSQL et Redis pour le pilotage à chaud.</p>
           <div className="session-header">
             <span>{session.username}</span>
-            <a href="/api/auth/logout">Deconnexion</a>
+            <a href="/api/auth/logout">Déconnexion</a>
           </div>
         </header>
 

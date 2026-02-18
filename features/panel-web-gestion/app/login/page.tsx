@@ -10,11 +10,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   oauth_state: "Session OAuth invalide, merci de réessayer.",
   oauth_token: "Impossible de récupérer le token Discord.",
   oauth_discord: "Connexion Discord impossible pour le moment.",
-  guild_missing: "Guild de vérification non configurée.",
-  role_required: "Accès refusé: ce compte n'a pas le rôle requis.",
+  guild_missing: "Serveur de vérification non configuré.",
+  role_required: "Accès refusé : ce compte n'a pas le rôle requis.",
 };
 
-function getErrorMessage(searchParams?: Record<string, string | string[] | undefined>): string | null {
+function getErrorMessage(
+  searchParams?: Record<string, string | string[] | undefined>
+): string | null {
   const raw = searchParams?.error;
   const key = Array.isArray(raw) ? raw[0] : raw;
   if (!key || typeof key !== "string") {

@@ -1,4 +1,6 @@
-﻿:root {
+:root {
+  --font-body: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-title: "ABC Ginto Nord", "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --bg: #1e1f22;
   --bg-elev: #2b2d31;
   --bg-elev-2: #313338;
@@ -20,7 +22,10 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "gg sans", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-body);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 a {
@@ -43,6 +48,9 @@ a {
 .sidebar h1 {
   margin: 0 0 6px;
   font-size: 20px;
+  font-family: var(--font-title);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .sidebar p {
@@ -74,6 +82,9 @@ a {
 
 .content-header h2 {
   margin: 0;
+  font-family: var(--font-title);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .content-header p {
@@ -114,6 +125,9 @@ a {
 
 .panel-card-header h2 {
   margin: 0;
+  font-family: var(--font-title);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .panel-card-header p {
@@ -150,6 +164,12 @@ a {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
+}
+
+.field > span,
+.switch-row > span {
+  color: #d7dbe6;
+  font-weight: 600;
 }
 
 .switch-row {
@@ -200,20 +220,15 @@ a {
   cursor: wait;
 }
 
-input {
-  background: var(--bg-elev-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
-}
-
+input,
 select {
   background: var(--bg-elev-2);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
+  font-family: var(--font-body);
+  font-size: 14px;
 }
 
 .roles-grid {
@@ -233,6 +248,7 @@ select {
 .role-label {
   font-weight: 700;
   margin-bottom: 8px;
+  color: #f7f8fa;
 }
 
 .card-footer {
@@ -245,11 +261,12 @@ select {
 button {
   border: none;
   background: var(--brand);
-  color: white;
+  color: #fff;
   border-radius: 8px;
   padding: 10px 14px;
   font-weight: 700;
   cursor: pointer;
+  font-family: var(--font-body);
 }
 
 button:disabled {
@@ -288,6 +305,7 @@ button:disabled {
 
 .login-card h1 {
   margin: 0;
+  font-family: var(--font-title);
 }
 
 .login-card p {
@@ -320,4 +338,3 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
-

@@ -179,9 +179,9 @@ export default function RolesReactionCard({ guildId }: Props) {
       setSuccess(
         isToggle
           ? data.enabled
-            ? "Feature activée."
-            : "Feature désactivée."
-          : "Configuration sauvegardée et événement Redis publié."
+            ? "Fonction activée."
+            : "Fonction désactivée."
+          : "Configuration enregistrée et mise à jour publiée."
       );
       return true;
     } catch (saveError) {
@@ -215,11 +215,11 @@ export default function RolesReactionCard({ guildId }: Props) {
     <section className="panel-card">
       <header className="panel-card-header">
         <div>
-          <h2>Roles Reaction</h2>
-          <p>Active/désactive et configure le panel de rôles réaction.</p>
+          <h2>Rôles réactions</h2>
+          <p>Activez ou désactivez la fonction et configurez les rôles attribuables.</p>
         </div>
         <span className={`status-badge ${enabled ? "on" : "off"}`}>
-          {enabled ? "Activé" : "Désactivé"}
+          {enabled ? "Activée" : "Désactivée"}
         </span>
       </header>
 
@@ -227,14 +227,14 @@ export default function RolesReactionCard({ guildId }: Props) {
 
       <div className="field-grid">
         <label className="switch-row">
-          <span>Feature activée</span>
+          <span>Fonction activée</span>
           <button
             type="button"
             className={`discord-switch ${enabled ? "on" : "off"}`}
             onClick={() => void toggleEnabled()}
             disabled={loading || saving || toggling}
             aria-pressed={enabled}
-            aria-label={enabled ? "Désactiver la feature" : "Activer la feature"}
+            aria-label={enabled ? "Désactiver la fonction" : "Activer la fonction"}
           >
             <span className="discord-switch-knob" />
           </button>
@@ -256,7 +256,7 @@ export default function RolesReactionCard({ guildId }: Props) {
               type="text"
               value={channelId}
               onChange={(event) => setChannelId(event.target.value)}
-              placeholder="ID salon (fallback)"
+              placeholder="ID du salon (secours)"
             />
           )}
         </label>
@@ -306,7 +306,7 @@ export default function RolesReactionCard({ guildId }: Props) {
         {error ? <p className="error">{error}</p> : null}
         {success ? <p className="success">{success}</p> : null}
         <button onClick={() => void save()} disabled={!canSave || saving || toggling || loading}>
-          {saving ? "Sauvegarde..." : "Sauvegarder"}
+          {saving ? "Enregistrement..." : "Enregistrer"}
         </button>
       </footer>
     </section>
