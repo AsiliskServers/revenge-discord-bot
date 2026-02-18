@@ -9,6 +9,7 @@ const {
 const {
   fetchConfiguredGuild,
   fetchGuildTextChannel,
+  fetchTextMessage,
   findBotMessageByComponent,
   hasConfiguredGuildId,
   readJsonFile,
@@ -17,20 +18,95 @@ const {
   writeJsonFile,
 } = require("../_shared/common");
 
-const TARGET_CHANNEL_ID = "1470813116395946229";
+let PgPoolCtor = null;
+let RedisCtor = null;
+
+try {
+  ({ Pool: PgPoolCtor } = require("pg"));
+} catch {
+  PgPoolCtor = null;
+}
+
+try {
+  RedisCtor = require("ioredis");
+} catch {
+  RedisCtor = null;
+}
+
+const FEATURE_KEY = "roles-reaction";
 const BUTTON_PREFIX = "role_reaction:";
+const REDIS_CHANNEL = process.env.PANEL_REDIS_CHANNEL || "revenge:feature:update";
 
-const ROLE_OPTIONS = [
-  { key: "giveaways", label: "🎁┃Giveaways", roleId: "1379156738346848297" },
-  { key: "annonces", label: "📢┃Annonces", roleId: "1472050708474761502" },
-  { key: "sondages", label: "📊┃Sondages", roleId: "1472050709158432862" },
-  { key: "events", label: "🎉┃Événements", roleId: "1472050710186033254" },
-];
-
-const ROLE_BY_KEY = new Map(ROLE_OPTIONS.map((item) => [item.key, item]));
+const DEFAULT_CONFIG = {
+  enabled: true,
+  channelId: "1470813116395946229",
+  roles: [
+    { key: "giveaways", label: "🎁┃Giveaways", roleId: "1379156738346848297" },
+    { key: "annonces", label: "📢┃Annonces", roleId: "1472050708474761502" },
+    { key: "sondages", label: "📊┃Sondages", roleId: "1472050709158432862" },
+    { key: "events", label: "🎉┃Événements", roleId: "1472050710186033254" },
+  ],
+};
 
 const RUNTIME_DIR = path.join(__dirname, ".runtime");
 const STATE_FILE = path.join(RUNTIME_DIR, "role-reaction-message.json");
+
+const runtime = {
+  dbPool: null,
+  schemaReady: false,
+  redisSubscriber: null,
+  pollTimer: null,
+  configByGuild: new Map(),
+};
+
+function chunk(list, size) {
+  const chunks = [];
+  for (let i = 0; i < list.length; i += size) {
+    chunks.push(list.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function asString(value, fallback = "") {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+function normalizeRoles(inputRoles) {
+  const source = Array.isArray(inputRoles) ? inputRoles : DEFAULT_CONFIG.roles;
+  const entries = source
+    .slice(0, 10)
+    .map((entry, index) => {
+      const key =
+        asString(entry?.key)
+          .toLowerCase()
+          .replace(/[^a-z0-9_]+/g, "_")
+          .replace(/^_+|_+$/g, "") || `role_${index + 1}`;
+
+      return {
+        key,
+        label: asString(entry?.label, `Rôle ${index + 1}`),
+        roleId: asString(entry?.roleId),
+      };
+    })
+    .filter((entry) => entry.label.length > 0 && entry.roleId.length > 0);
+
+  return entries.length > 0 ? entries : DEFAULT_CONFIG.roles;
+}
+
+function normalizeConfig(rawEnabled, rawConfig) {
+  const source = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
+  return {
+    enabled: typeof rawEnabled === "boolean" ? rawEnabled : true,
+    channelId: asString(source.channelId, DEFAULT_CONFIG.channelId),
+    roles: normalizeRoles(source.roles),
+  };
+}
+
+function configRoleByCustomId(config) {
+  return new Map(
+    (config.roles || []).map((role) => [`${BUTTON_PREFIX}${role.key}`, role])
+  );
+}
 
 function buildEmbed() {
   return new EmbedBuilder()
@@ -47,23 +123,129 @@ function buildEmbed() {
     );
 }
 
-function buildComponents() {
-  const buttons = ROLE_OPTIONS.map((item) =>
+function buildComponents(config) {
+  const buttons = (config.roles || []).map((item) =>
     new ButtonBuilder()
       .setCustomId(`${BUTTON_PREFIX}${item.key}`)
       .setStyle(ButtonStyle.Secondary)
       .setLabel(item.label)
   );
 
-  return [new ActionRowBuilder().addComponents(buttons)];
+  return chunk(buttons, 5).map((rowButtons) =>
+    new ActionRowBuilder().addComponents(rowButtons)
+  );
 }
 
-function buildPayload() {
+function buildPayload(config) {
   return {
     embeds: [buildEmbed()],
-    components: buildComponents(),
+    components: buildComponents(config),
     allowedMentions: { parse: [] },
   };
+}
+
+function getDatabaseUrl() {
+  return asString(process.env.PANEL_DATABASE_URL);
+}
+
+function canUseDatabase() {
+  return Boolean(getDatabaseUrl() && PgPoolCtor);
+}
+
+function getDbPool() {
+  if (runtime.dbPool) {
+    return runtime.dbPool;
+  }
+  if (!canUseDatabase()) {
+    return null;
+  }
+
+  runtime.dbPool = new PgPoolCtor({
+    connectionString: getDatabaseUrl(),
+    ssl: process.env.PANEL_DATABASE_SSL === "1" ? { rejectUnauthorized: false } : undefined,
+    max: 4,
+  });
+
+  runtime.dbPool.on("error", (error) => {
+    console.error("[ROLE REACTION] PostgreSQL pool error");
+    console.error(error);
+  });
+
+  return runtime.dbPool;
+}
+
+async function ensureSchema() {
+  const pool = getDbPool();
+  if (!pool || runtime.schemaReady) {
+    return;
+  }
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS panel_feature_configs (
+      guild_id TEXT NOT NULL,
+      feature_key TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_by TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (guild_id, feature_key)
+    );
+  `);
+
+  runtime.schemaReady = true;
+}
+
+async function loadConfigForGuild(guildId) {
+  const pool = getDbPool();
+  if (!pool) {
+    return DEFAULT_CONFIG;
+  }
+
+  try {
+    await ensureSchema();
+    const result = await pool.query(
+      `
+        SELECT enabled, config_json
+        FROM panel_feature_configs
+        WHERE guild_id = $1 AND feature_key = $2
+        LIMIT 1
+      `,
+      [guildId, FEATURE_KEY]
+    );
+
+    const row = result.rows?.[0];
+    if (!row) {
+      return DEFAULT_CONFIG;
+    }
+
+    return normalizeConfig(row.enabled, row.config_json);
+  } catch (error) {
+    console.error("[ROLE REACTION] Impossible de charger la config DB, fallback default.");
+    console.error(error);
+    return DEFAULT_CONFIG;
+  }
+}
+
+function readMessageState() {
+  return readJsonFile(STATE_FILE, null);
+}
+
+function writeMessageState(state) {
+  if (!state) {
+    writeJsonFile(STATE_FILE, {});
+    return;
+  }
+  writeJsonFile(STATE_FILE, state);
+}
+
+async function deleteTrackedMessage(client, state) {
+  if (!state?.channelId || !state?.messageId) {
+    return;
+  }
+  const message = await fetchTextMessage(client, state.channelId, state.messageId);
+  if (message) {
+    await message.delete().catch(() => null);
+  }
 }
 
 async function findExistingMessage(channel, botId) {
@@ -73,20 +255,24 @@ async function findExistingMessage(channel, botId) {
   });
 }
 
-async function ensureRoleReactionMessage(client) {
-  const guild = await fetchConfiguredGuild(client);
-  if (!guild) {
+async function ensureRoleReactionMessage(client, guild, config) {
+  if (!config.enabled) {
+    const previousState = readMessageState();
+    await deleteTrackedMessage(client, previousState).catch(() => null);
+    writeMessageState(null);
     return;
   }
 
-  const channel = await fetchGuildTextChannel(guild, TARGET_CHANNEL_ID);
+  const channel = await fetchGuildTextChannel(guild, config.channelId);
   if (!channel || channel.type !== ChannelType.GuildText) {
-    console.error(`[ROLE REACTION] Salon invalide ou introuvable (${TARGET_CHANNEL_ID}).`);
+    console.error(
+      `[ROLE REACTION] Salon invalide ou introuvable (${config.channelId}).`
+    );
     return;
   }
 
-  const payload = buildPayload();
-  const state = readJsonFile(STATE_FILE, null);
+  const payload = buildPayload(config);
+  const state = readMessageState();
 
   if (
     state &&
@@ -101,10 +287,20 @@ async function ensureRoleReactionMessage(client) {
     }
   }
 
+  if (
+    state &&
+    state.guildId === guild.id &&
+    state.channelId &&
+    state.channelId !== channel.id &&
+    state.messageId
+  ) {
+    await deleteTrackedMessage(client, state).catch(() => null);
+  }
+
   const existing = await findExistingMessage(channel, client.user.id);
   if (existing) {
     await existing.edit(payload).catch(() => null);
-    writeJsonFile(STATE_FILE, {
+    writeMessageState({
       guildId: guild.id,
       channelId: channel.id,
       messageId: existing.id,
@@ -113,22 +309,47 @@ async function ensureRoleReactionMessage(client) {
   }
 
   const sent = await channel.send(payload);
-  writeJsonFile(STATE_FILE, {
+  writeMessageState({
     guildId: guild.id,
     channelId: channel.id,
     messageId: sent.id,
   });
 }
 
-async function handleRoleButton(interaction) {
-  const key = interaction.customId.slice(BUTTON_PREFIX.length);
-  const roleOption = ROLE_BY_KEY.get(key);
-  if (!roleOption) {
+async function refreshGuildConfigAndMessage(client, guildId) {
+  if (!guildId) {
     return;
   }
 
+  const guild = await client.guilds.fetch(guildId).catch(() => null);
+  if (!guild) {
+    return;
+  }
+
+  const config = await loadConfigForGuild(guildId);
+  runtime.configByGuild.set(guildId, config);
+  await ensureRoleReactionMessage(client, guild, config);
+}
+
+async function handleRoleButton(interaction) {
   if (!interaction.inGuild()) {
     await replyEphemeral(interaction, "Cette action est disponible uniquement sur le serveur.");
+    return;
+  }
+
+  const config =
+    runtime.configByGuild.get(interaction.guildId) ||
+    (await loadConfigForGuild(interaction.guildId));
+  runtime.configByGuild.set(interaction.guildId, config);
+
+  if (!config.enabled) {
+    await replyEphemeral(interaction, "La feature Roles Reaction est désactivée.");
+    return;
+  }
+
+  const roleOption = configRoleByCustomId(config).get(interaction.customId);
+  if (!roleOption) {
+    await replyEphemeral(interaction, "Ce bouton n'est plus actif.");
     return;
   }
 
@@ -162,6 +383,68 @@ async function handleRoleButton(interaction) {
   await replyEphemeral(interaction, `Rôle ajouté : ${resolvedRole.role.name}`);
 }
 
+function startRedisSubscription(client) {
+  const redisUrl = asString(process.env.PANEL_REDIS_URL);
+  if (!redisUrl || !RedisCtor || runtime.redisSubscriber) {
+    return;
+  }
+
+  const subscriber = new RedisCtor(redisUrl, {
+    maxRetriesPerRequest: 2,
+    enableOfflineQueue: true,
+  });
+
+  subscriber.on("error", (error) => {
+    console.error("[ROLE REACTION] Redis subscriber error");
+    console.error(error.message || error);
+  });
+
+  subscriber.on("message", async (channel, message) => {
+    if (channel !== REDIS_CHANNEL) {
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(message);
+      if (payload?.featureKey !== FEATURE_KEY) {
+        return;
+      }
+      if (client.config?.guildId && payload.guildId !== client.config.guildId) {
+        return;
+      }
+
+      await refreshGuildConfigAndMessage(client, payload.guildId);
+    } catch (error) {
+      console.error("[ROLE REACTION] Redis payload invalide");
+      console.error(error);
+    }
+  });
+
+  subscriber.subscribe(REDIS_CHANNEL).catch((error) => {
+    console.error("[ROLE REACTION] Impossible de s'abonner au channel Redis");
+    console.error(error);
+  });
+
+  runtime.redisSubscriber = subscriber;
+}
+
+function startDatabasePolling(client) {
+  if (runtime.pollTimer || !canUseDatabase()) {
+    return;
+  }
+
+  runtime.pollTimer = setInterval(() => {
+    if (!client.config?.guildId) {
+      return;
+    }
+    void refreshGuildConfigAndMessage(client, client.config.guildId);
+  }, 45_000);
+
+  if (typeof runtime.pollTimer.unref === "function") {
+    runtime.pollTimer.unref();
+  }
+}
+
 module.exports = {
   name: "feature:role-reaction",
   async init(client) {
@@ -170,7 +453,21 @@ module.exports = {
         console.warn("[ROLE REACTION] DISCORD_GUILD_ID absent, feature ignorée.");
         return;
       }
-      await ensureRoleReactionMessage(client);
+
+      await refreshGuildConfigAndMessage(client, client.config.guildId);
+      startRedisSubscription(client);
+      startDatabasePolling(client);
+
+      if (!PgPoolCtor) {
+        console.warn(
+          "[ROLE REACTION] Module pg absent, fonctionnement en config locale par défaut."
+        );
+      }
+      if (!RedisCtor) {
+        console.warn(
+          "[ROLE REACTION] Module ioredis absent, refresh à chaud Redis désactivé."
+        );
+      }
     });
 
     client.on("interactionCreate", async (interaction) => {

@@ -1,0 +1,24 @@
+{
+  "name": "panel-web-gestion",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "build": "next build",
+    "start": "next start -p 3010",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ioredis": "^5.4.1",
+    "next": "14.2.25",
+    "pg": "^8.13.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.6",
+    "@types/pg": "^8.11.11",
+    "@types/react": "^18.3.12",
+    "typescript": "^5.6.3"
+  }
+}

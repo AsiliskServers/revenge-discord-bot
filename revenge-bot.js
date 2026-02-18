@@ -16,6 +16,10 @@ const SKIP_DIRECTORY_NAMES = new Set([
   ".cache",
   ".runtime",
   "_shared",
+  "panel-web-gestion",
+  "node_modules",
+  ".next",
+  "dist",
 ]);
 
 const MODULE_DIRECTORIES = ["features", "commands", "events"];
