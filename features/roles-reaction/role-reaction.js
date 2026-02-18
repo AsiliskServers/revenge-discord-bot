@@ -7,7 +7,6 @@ const {
   EmbedBuilder,
 } = require("discord.js");
 const {
-  fetchConfiguredGuild,
   fetchGuildTextChannel,
   fetchTextMessage,
   findBotMessageByComponent,
@@ -237,15 +236,15 @@ async function loadConfigForGuild(guildId) {
 }
 
 function readMessageState() {
-  return readJsonFile(STATE_FILE, null);
+  const state = readJsonFile(STATE_FILE, null);
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+  return state?.channelId && state?.messageId ? state : null;
 }
 
 function writeMessageState(state) {
-  if (!state) {
-    writeJsonFile(STATE_FILE, {});
-    return;
-  }
-  writeJsonFile(STATE_FILE, state);
+  writeJsonFile(STATE_FILE, state || {});
 }
 
 async function deleteTrackedMessage(client, state) {
@@ -334,17 +333,21 @@ async function refreshGuildConfigAndMessage(client, guildId) {
   await ensureRoleReactionMessage(client, guild, config);
 }
 
+async function resolveGuildConfig(guildId) {
+  const config = canUseDatabase()
+    ? await loadConfigForGuild(guildId)
+    : runtime.configByGuild.get(guildId) || (await loadConfigForGuild(guildId));
+  runtime.configByGuild.set(guildId, config);
+  return config;
+}
+
 async function handleRoleButton(interaction) {
   if (!interaction.inGuild()) {
     await replyEphemeral(interaction, "Cette action est disponible uniquement sur le serveur.");
     return;
   }
 
-  const config = canUseDatabase()
-    ? await loadConfigForGuild(interaction.guildId)
-    : runtime.configByGuild.get(interaction.guildId) ||
-      (await loadConfigForGuild(interaction.guildId));
-  runtime.configByGuild.set(interaction.guildId, config);
+  const config = await resolveGuildConfig(interaction.guildId);
 
   if (!config.enabled) {
     await replyEphemeral(

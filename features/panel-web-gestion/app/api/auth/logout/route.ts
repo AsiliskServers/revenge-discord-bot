@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPanelPublicOrigin, PANEL_SESSION_COOKIE } from "@/lib/auth";
+import { buildPanelUrl, clearPanelSessionCookie } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
-  const redirectUrl = new URL("/login", getPanelPublicOrigin(request));
+  const redirectUrl = buildPanelUrl(request, "/login");
   const response = NextResponse.redirect(redirectUrl);
-  response.cookies.set(PANEL_SESSION_COOKIE, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
+  clearPanelSessionCookie(response);
   return response;
 }

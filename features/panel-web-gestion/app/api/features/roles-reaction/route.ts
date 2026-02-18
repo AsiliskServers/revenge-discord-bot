@@ -7,6 +7,11 @@ import {
   saveRolesReactionRecord,
 } from "@/lib/store";
 
+type AuthorizedContext = {
+  guildId: string;
+  userId: string;
+};
+
 function resolveGuildId(request: NextRequest, bodyGuildId?: unknown): string {
   const fromBody = typeof bodyGuildId === "string" ? bodyGuildId.trim() : "";
   if (fromBody) {
@@ -30,22 +35,34 @@ function forbidden() {
   return NextResponse.json({ ok: false, error: "Acces refuse" }, { status: 403 });
 }
 
+function resolveAuthorizedContext(
+  request: NextRequest,
+  bodyGuildId?: unknown
+): AuthorizedContext | NextResponse {
+  const session = getSessionFromRequest(request);
+  if (!session) {
+    return unauthorized();
+  }
+
+  const guildId = resolveGuildId(request, bodyGuildId);
+  if (!guildId) {
+    return NextResponse.json({ ok: false, error: "Guild ID manquant" }, { status: 400 });
+  }
+  if (guildId !== session.guildId) {
+    return forbidden();
+  }
+
+  return { guildId, userId: session.userId };
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const session = getSessionFromRequest(request);
-    if (!session) {
-      return unauthorized();
+    const context = resolveAuthorizedContext(request);
+    if (context instanceof NextResponse) {
+      return context;
     }
 
-    const guildId = resolveGuildId(request);
-    if (!guildId) {
-      return NextResponse.json({ ok: false, error: "Guild ID manquant" }, { status: 400 });
-    }
-    if (guildId !== session.guildId) {
-      return forbidden();
-    }
-
-    const record = await getRolesReactionRecord(guildId);
+    const record = await getRolesReactionRecord(context.guildId);
     return NextResponse.json({ ok: true, data: record });
   } catch (error) {
     return NextResponse.json(
@@ -57,33 +74,25 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = getSessionFromRequest(request);
-    if (!session) {
-      return unauthorized();
-    }
-
     const body = await request.json().catch(() => ({}));
-    const guildId = resolveGuildId(request, body?.guildId);
-    if (!guildId) {
-      return NextResponse.json({ ok: false, error: "Guild ID manquant" }, { status: 400 });
-    }
-    if (guildId !== session.guildId) {
-      return forbidden();
+    const context = resolveAuthorizedContext(request, body?.guildId);
+    if (context instanceof NextResponse) {
+      return context;
     }
 
     const enabled = typeof body?.enabled === "boolean" ? body.enabled : true;
     const config = normalizeRoleReactionConfig(body?.config);
 
     const saved = await saveRolesReactionRecord({
-      guildId,
+      guildId: context.guildId,
       enabled,
       config,
-      updatedBy: `panel:${session.userId}`,
+      updatedBy: `panel:${context.userId}`,
     });
 
     await publishFeatureUpdate({
       type: "feature.updated",
-      guildId,
+      guildId: context.guildId,
       featureKey: saved.featureKey,
       enabled: saved.enabled,
       config: saved.config,

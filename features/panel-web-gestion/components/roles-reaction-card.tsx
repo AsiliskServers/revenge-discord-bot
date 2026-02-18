@@ -15,6 +15,8 @@ type Props = {
   guildId: string;
 };
 
+type SaveMode = "toggle" | "save";
+
 export default function RolesReactionCard({ guildId }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,25 +28,34 @@ export default function RolesReactionCard({ guildId }: Props) {
   const [channelId, setChannelId] = useState("");
   const [roles, setRoles] = useState<RoleReactionEntry[]>([]);
 
-  async function load() {
-    setLoading(true);
+  function clearAlerts() {
     setError(null);
     setSuccess(null);
+  }
 
+  function applyRecord(data: ApiRecord) {
+    setEnabled(Boolean(data.enabled));
+    setChannelId(data.config.channelId || "");
+    setRoles(data.config.roles || []);
+  }
+
+  async function fetchRecord(): Promise<ApiRecord> {
+    const response = await fetch(`/api/features/roles-reaction?guildId=${guildId}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error || "Échec de chargement");
+    }
+    return payload.data as ApiRecord;
+  }
+
+  async function load() {
+    setLoading(true);
+    clearAlerts();
     try {
-      const response = await fetch(`/api/features/roles-reaction?guildId=${guildId}`, {
-        method: "GET",
-        cache: "no-store",
-      });
-      const payload = await response.json();
-      if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error || "Échec de chargement");
-      }
-
-      const data: ApiRecord = payload.data;
-      setEnabled(Boolean(data.enabled));
-      setChannelId(data.config.channelId || "");
-      setRoles(data.config.roles || []);
+      applyRecord(await fetchRecord());
     } catch (loadError) {
       setError(String(loadError));
     } finally {
@@ -72,7 +83,11 @@ export default function RolesReactionCard({ guildId }: Props) {
     );
   }
 
-  async function patchConfig(nextEnabled: boolean, nextChannelId: string, nextRoles: RoleReactionEntry[]) {
+  async function patchConfig(
+    nextEnabled: boolean,
+    nextChannelId: string,
+    nextRoles: RoleReactionEntry[]
+  ): Promise<ApiRecord> {
     const response = await fetch("/api/features/roles-reaction", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -90,50 +105,62 @@ export default function RolesReactionCard({ guildId }: Props) {
     if (!response.ok || !payload?.ok) {
       throw new Error(payload?.error || "Échec de sauvegarde");
     }
+    return payload.data as ApiRecord;
+  }
+
+  async function runSave(mode: SaveMode, nextEnabled: boolean) {
+    const isToggle = mode === "toggle";
+    if (loading || saving || toggling) {
+      return false;
+    }
+
+    if (!isToggle && !canSave) {
+      return false;
+    }
+
+    if (isToggle) {
+      setToggling(true);
+    } else {
+      setSaving(true);
+    }
+    clearAlerts();
+
+    try {
+      const data = await patchConfig(nextEnabled, channelId.trim(), roles);
+      applyRecord(data);
+      setSuccess(
+        isToggle
+          ? data.enabled
+            ? "Feature activée."
+            : "Feature désactivée."
+          : "Configuration sauvegardée et événement Redis publié."
+      );
+      return true;
+    } catch (saveError) {
+      setError(String(saveError));
+      return false;
+    } finally {
+      if (isToggle) {
+        setToggling(false);
+      } else {
+        setSaving(false);
+      }
+    }
   }
 
   async function toggleEnabled() {
-    if (loading || saving || toggling) {
-      return;
-    }
-
     const previousEnabled = enabled;
     const nextEnabled = !previousEnabled;
-
     setEnabled(nextEnabled);
-    setToggling(true);
-    setError(null);
-    setSuccess(null);
 
-    try {
-      await patchConfig(nextEnabled, channelId.trim(), roles);
-      setSuccess(nextEnabled ? "Feature activée." : "Feature désactivée.");
-    } catch (toggleError) {
+    const ok = await runSave("toggle", nextEnabled);
+    if (!ok) {
       setEnabled(previousEnabled);
-      setError(String(toggleError));
-    } finally {
-      setToggling(false);
     }
   }
 
   async function save() {
-    if (!canSave || saving) {
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      await patchConfig(enabled, channelId.trim(), roles);
-      setSuccess("Configuration sauvegardée et événement Redis publié.");
-      await load();
-    } catch (saveError) {
-      setError(String(saveError));
-    } finally {
-      setSaving(false);
-    }
+    await runSave("save", enabled);
   }
 
   return (
@@ -200,7 +227,7 @@ export default function RolesReactionCard({ guildId }: Props) {
       <footer className="card-footer">
         {error ? <p className="error">{error}</p> : null}
         {success ? <p className="success">{success}</p> : null}
-        <button onClick={save} disabled={!canSave || saving || toggling || loading}>
+        <button onClick={() => void save()} disabled={!canSave || saving || toggling || loading}>
           {saving ? "Sauvegarde..." : "Sauvegarder"}
         </button>
       </footer>

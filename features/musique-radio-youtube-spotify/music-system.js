@@ -941,14 +941,6 @@ async function resolveInputToTracks(input, requestedById) {
     throw new Error("Les liens Spotify ne sont plus supportés.");
   }
 
-  if (
-    validated === "yt_video" ||
-    validated === "yt_playlist" ||
-    looksLikeYouTubeMixOrPlaylist(trimmed)
-  ) {
-    return resolveYouTubeTracks(trimmed, requestedById);
-  }
-
   return resolveYouTubeTracks(trimmed, requestedById);
 }
 
@@ -1013,6 +1005,13 @@ function canControlMusic(interaction, state) {
   return null;
 }
 
+async function replyMusicEphemeral(interaction, content) {
+  await interaction.reply({
+    content,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
 async function handlePlayCommand(interaction) {
   const linkInput = interaction.options.getString("lien", false);
   const searchInput = interaction.options.getString("recherche", false);
@@ -1021,18 +1020,15 @@ async function handlePlayCommand(interaction) {
   const voiceChannel = member?.voice?.channel;
 
   if (!input) {
-    await interaction.reply({
-      content: "Indique un lien ou une recherche. Exemple: /play recherche: damso macarena",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyMusicEphemeral(
+      interaction,
+      "Indique un lien ou une recherche. Exemple: /play recherche: damso macarena"
+    );
     return;
   }
 
   if (!voiceChannel) {
-    await interaction.reply({
-      content: "Rejoins un salon vocal avant d'utiliser /play.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyMusicEphemeral(interaction, "Rejoins un salon vocal avant d'utiliser /play.");
     return;
   }
 
@@ -1040,18 +1036,15 @@ async function handlePlayCommand(interaction) {
     voiceChannel.type !== ChannelType.GuildVoice &&
     voiceChannel.type !== ChannelType.GuildStageVoice
   ) {
-    await interaction.reply({
-      content: "Salon vocal invalide.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyMusicEphemeral(interaction, "Salon vocal invalide.");
     return;
   }
 
   if (!hasVoicePermissionsForBot(interaction, voiceChannel)) {
-    await interaction.reply({
-      content: "Le bot doit avoir Connect + Speak dans ce salon vocal.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyMusicEphemeral(
+      interaction,
+      "Le bot doit avoir Connect + Speak dans ce salon vocal."
+    );
     return;
   }
 
@@ -1094,27 +1087,18 @@ async function handlePlayCommand(interaction) {
 async function handleMusicButton(interaction) {
   const state = guildMusicStates.get(interaction.guildId);
   if (!state) {
-    await interaction.reply({
-      content: "Aucune session musique active.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyMusicEphemeral(interaction, "Aucune session musique active.");
     return;
   }
 
   if (interaction.message.id !== state.controlMessageId) {
-    await interaction.reply({
-      content: "Ce panneau de contrôle n'est plus actif.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyMusicEphemeral(interaction, "Ce panneau de contrôle n'est plus actif.");
     return;
   }
 
   const controlError = canControlMusic(interaction, state);
   if (controlError) {
-    await interaction.reply({
-      content: controlError,
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyMusicEphemeral(interaction, controlError);
     return;
   }
 

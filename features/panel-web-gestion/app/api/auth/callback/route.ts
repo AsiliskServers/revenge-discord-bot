@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildDiscordAvatarUrl,
+  buildPanelUrl,
+  clearOAuthStateCookie,
   createSessionToken,
   getDiscordOAuthConfig,
-  getPanelPublicOrigin,
   OAUTH_STATE_COOKIE,
-  PANEL_SESSION_COOKIE,
-  PANEL_SESSION_TTL_SECONDS,
+  redirectToLogin,
+  setPanelSessionCookie,
   type PanelSession,
 } from "@/lib/auth";
 
@@ -24,12 +25,6 @@ type DiscordUserResponse = {
 type DiscordMemberResponse = {
   roles?: string[];
 };
-
-function loginRedirect(request: NextRequest, error: string): NextResponse {
-  const url = new URL("/login", getPanelPublicOrigin(request));
-  url.searchParams.set("error", error);
-  return NextResponse.redirect(url);
-}
 
 async function fetchDiscordJson<T>(url: string, accessToken: string): Promise<T> {
   const response = await fetch(url, {
@@ -52,13 +47,13 @@ export async function GET(request: NextRequest) {
   const stateCookie = request.cookies.get(OAUTH_STATE_COOKIE)?.value || "";
 
   if (!queryState || !code || !stateCookie || queryState !== stateCookie) {
-    return loginRedirect(request, "oauth_state");
+    return redirectToLogin(request, "oauth_state");
   }
 
   try {
     const { clientId, clientSecret, redirectUri, guildId, allowedRoleId } = getDiscordOAuthConfig();
     if (!guildId) {
-      return loginRedirect(request, "guild_missing");
+      return redirectToLogin(request, "guild_missing");
     }
 
     const tokenBody = new URLSearchParams({
@@ -79,13 +74,13 @@ export async function GET(request: NextRequest) {
     });
 
     if (!tokenResponse.ok) {
-      return loginRedirect(request, "oauth_token");
+      return redirectToLogin(request, "oauth_token");
     }
 
     const tokenJson = (await tokenResponse.json()) as DiscordTokenResponse;
     const accessToken = tokenJson.access_token;
     if (!accessToken) {
-      return loginRedirect(request, "oauth_token");
+      return redirectToLogin(request, "oauth_token");
     }
 
     const [user, member] = await Promise.all([
@@ -98,7 +93,7 @@ export async function GET(request: NextRequest) {
 
     const roles = Array.isArray(member.roles) ? member.roles : [];
     if (!roles.includes(allowedRoleId)) {
-      return loginRedirect(request, "role_required");
+      return redirectToLogin(request, "role_required");
     }
 
     const session: PanelSession = {
@@ -110,24 +105,12 @@ export async function GET(request: NextRequest) {
       issuedAt: Math.floor(Date.now() / 1000),
     };
 
-    const redirectUrl = new URL("/", getPanelPublicOrigin(request));
+    const redirectUrl = buildPanelUrl(request, "/");
     const response = NextResponse.redirect(redirectUrl);
-    response.cookies.set(PANEL_SESSION_COOKIE, createSessionToken(session), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: PANEL_SESSION_TTL_SECONDS,
-    });
-    response.cookies.set(OAUTH_STATE_COOKIE, "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    });
+    setPanelSessionCookie(response, createSessionToken(session));
+    clearOAuthStateCookie(response);
     return response;
   } catch {
-    return loginRedirect(request, "oauth_discord");
+    return redirectToLogin(request, "oauth_discord");
   }
 }

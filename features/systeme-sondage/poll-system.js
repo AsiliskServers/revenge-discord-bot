@@ -21,6 +21,7 @@ const {
   findBotMessageByComponent,
   hasConfiguredGuildId,
   readJsonFile,
+  replyEphemeral,
   upsertGuildCommand,
   writeJsonFile,
 } = require("../_shared/common");
@@ -117,6 +118,29 @@ function loadPollStore() {
 
 function savePollStore() {
   writeJsonFile(POLLS_STATE_FILE, Array.from(pollStore.values()));
+}
+
+function readHubState() {
+  const state = readJsonFile(HUB_STATE_FILE, null);
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+  return state?.guildId && state?.channelId && state?.messageId ? state : null;
+}
+
+function writeHubState(message) {
+  writeJsonFile(HUB_STATE_FILE, {
+    guildId: message.guild.id,
+    channelId: message.channelId,
+    messageId: message.id,
+  });
+}
+
+async function followUpEphemeral(interaction, content) {
+  await interaction.followUp({
+    content,
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 async function getPollChannel(client) {
@@ -312,7 +336,7 @@ async function ensureHubMessage(client) {
   }
 
   const payload = buildHubPayload(client);
-  const state = readJsonFile(HUB_STATE_FILE, null);
+  const state = readHubState();
 
   if (
     state &&
@@ -330,20 +354,12 @@ async function ensureHubMessage(client) {
   const existing = await findExistingHubMessage(channel, client.user.id);
   if (existing) {
     await existing.edit(payload).catch(() => null);
-    writeJsonFile(HUB_STATE_FILE, {
-      guildId: channel.guild.id,
-      channelId: channel.id,
-      messageId: existing.id,
-    });
+    writeHubState(existing);
     return existing;
   }
 
   const sent = await channel.send(payload);
-  writeJsonFile(HUB_STATE_FILE, {
-    guildId: channel.guild.id,
-    channelId: channel.id,
-    messageId: sent.id,
-  });
+  writeHubState(sent);
   return sent;
 }
 
@@ -353,7 +369,7 @@ async function bumpHubMessageToBottom(client, channel) {
     return null;
   }
 
-  const state = readJsonFile(HUB_STATE_FILE, null);
+  const state = readHubState();
   let existing = null;
 
   if (
@@ -374,11 +390,7 @@ async function bumpHubMessageToBottom(client, channel) {
   }
 
   const sent = await targetChannel.send(buildHubPayload(client));
-  writeJsonFile(HUB_STATE_FILE, {
-    guildId: targetChannel.guild.id,
-    channelId: targetChannel.id,
-    messageId: sent.id,
-  });
+  writeHubState(sent);
   return sent;
 }
 
@@ -446,10 +458,7 @@ function closePoll({ poll, reason, closedById }) {
 async function createSuggestionFromModal(interaction) {
   const checkError = canCreateSuggestionInChannel(interaction);
   if (checkError) {
-    await interaction.reply({
-      content: checkError,
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, checkError);
     return;
   }
 
@@ -460,12 +469,11 @@ async function createSuggestionFromModal(interaction) {
     countUserActiveSuggestions(interaction.guildId, interaction.user.id) >=
     MAX_ACTIVE_SUGGESTIONS_PER_USER
   ) {
-    await interaction.reply({
-      content:
-        `Tu as déjà ${MAX_ACTIVE_SUGGESTIONS_PER_USER} suggestion(s) active(s). ` +
-        "Attends une décision du staff sur l'une d'elles pour en créer une nouvelle.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(
+      interaction,
+      `Tu as déjà ${MAX_ACTIVE_SUGGESTIONS_PER_USER} suggestion(s) active(s). ` +
+        "Attends une décision du staff sur l'une d'elles pour en créer une nouvelle."
+    );
     return;
   }
 
@@ -555,26 +563,17 @@ async function handleVoteButton(interaction, voteType) {
   const poll = pollStore.get(pollId);
 
   if (!poll) {
-    await interaction.reply({
-      content: "Ce sondage n'existe plus.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Ce sondage n'existe plus.");
     return;
   }
 
   if (interaction.user.bot) {
-    await interaction.reply({
-      content: "Action non autorisée.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Action non autorisée.");
     return;
   }
 
   if (poll.locked) {
-    await interaction.reply({
-      content: "Cette suggestion est déjà verrouillée.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Cette suggestion est déjà verrouillée.");
     return;
   }
 
@@ -593,10 +592,7 @@ async function handleVoteButton(interaction, voteType) {
     info = "Ton vote a été retiré.";
   }
 
-  await interaction.followUp({
-    content: info,
-    flags: MessageFlags.Ephemeral,
-  });
+  await followUpEphemeral(interaction, info);
 }
 
 async function handleCloseSuggestionButton(interaction) {
@@ -604,26 +600,17 @@ async function handleCloseSuggestionButton(interaction) {
   const poll = pollStore.get(pollId);
 
   if (!poll) {
-    await interaction.reply({
-      content: "Suggestion introuvable.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Suggestion introuvable.");
     return;
   }
 
   if (interaction.user.id !== poll.authorId) {
-    await interaction.reply({
-      content: "Seul le créateur de la suggestion peut la fermer.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Seul le créateur de la suggestion peut la fermer.");
     return;
   }
 
   if (poll.locked) {
-    await interaction.reply({
-      content: "Cette suggestion est déjà fermée.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Cette suggestion est déjà fermée.");
     return;
   }
 
@@ -642,11 +629,10 @@ async function handleCloseSuggestionButton(interaction) {
   await interaction.deferUpdate();
   await updateStoredPollMessage(interaction.client, poll);
 
-  await interaction.followUp({
-    content:
-      "Suggestion fermée. Tu peux maintenant en créer une autre si tu étais à la limite.",
-    flags: MessageFlags.Ephemeral,
-  });
+  await followUpEphemeral(
+    interaction,
+    "Suggestion fermée. Tu peux maintenant en créer une autre si tu étais à la limite."
+  );
 }
 
 async function registerDecisionCommand(client) {
@@ -679,10 +665,7 @@ async function registerDecisionCommand(client) {
 
 async function handleDecisionCommand(interaction) {
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
-    await interaction.reply({
-      content: "Permission requise: ManageMessages.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Permission requise: ManageMessages.");
     return;
   }
 
@@ -691,10 +674,7 @@ async function handleDecisionCommand(interaction) {
   const poll = pollStore.get(pollId);
 
   if (!poll) {
-    await interaction.reply({
-      content: "Suggestion introuvable.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Suggestion introuvable.");
     return;
   }
 
@@ -757,11 +737,11 @@ module.exports = {
       }
 
       if (interaction.isButton() && interaction.customId === CREATE_POLL_BUTTON_ID) {
-        if (interaction.channelId !== POLL_CHANNEL_ID) {
-          await interaction.reply({
-            content: `Ce bouton fonctionne uniquement dans <#${POLL_CHANNEL_ID}>.`,
-            flags: MessageFlags.Ephemeral,
-          });
+      if (interaction.channelId !== POLL_CHANNEL_ID) {
+          await replyEphemeral(
+            interaction,
+            `Ce bouton fonctionne uniquement dans <#${POLL_CHANNEL_ID}>.`
+          );
           return;
         }
 

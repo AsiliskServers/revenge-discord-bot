@@ -2,16 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createOAuthState,
   getDiscordOAuthConfig,
-  getPanelPublicOrigin,
-  OAUTH_STATE_COOKIE,
-  OAUTH_STATE_TTL_SECONDS,
+  redirectToLogin,
+  setOAuthStateCookie,
 } from "@/lib/auth";
-
-function buildLoginRedirect(request: NextRequest, error: string): NextResponse {
-  const url = new URL("/login", getPanelPublicOrigin(request));
-  url.searchParams.set("error", error);
-  return NextResponse.redirect(url);
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,15 +19,9 @@ export async function GET(request: NextRequest) {
     authorizeUrl.searchParams.set("state", state);
 
     const response = NextResponse.redirect(authorizeUrl);
-    response.cookies.set(OAUTH_STATE_COOKIE, state, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_SECONDS,
-    });
+    setOAuthStateCookie(response, state);
     return response;
   } catch {
-    return buildLoginRedirect(request, "oauth_config");
+    return redirectToLogin(request, "oauth_config");
   }
 }

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 export const PANEL_SESSION_COOKIE = "revenge_panel_session";
 export const OAUTH_STATE_COOKIE = "revenge_panel_oauth_state";
@@ -23,6 +23,8 @@ export type DiscordOAuthConfig = {
   guildId: string;
   allowedRoleId: string;
 };
+
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 function firstHeaderValue(value: string | null): string {
   return (value || "")
@@ -190,6 +192,66 @@ export function getPanelPublicOrigin(request?: NextRequest): string {
   }
 
   return new URL(request.url).origin;
+}
+
+export function buildPanelUrl(
+  request: NextRequest,
+  pathname: string,
+  searchParams?: Record<string, string | null | undefined>
+): URL {
+  const url = new URL(pathname, getPanelPublicOrigin(request));
+  if (searchParams) {
+    for (const [key, value] of Object.entries(searchParams)) {
+      if (typeof value === "string" && value.length > 0) {
+        url.searchParams.set(key, value);
+      }
+    }
+  }
+  return url;
+}
+
+export function redirectToLogin(request: NextRequest, error?: string): NextResponse {
+  return NextResponse.redirect(buildPanelUrl(request, "/login", { error }));
+}
+
+export function setOAuthStateCookie(response: NextResponse, state: string): void {
+  response.cookies.set(OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: "lax",
+    path: "/",
+    maxAge: OAUTH_STATE_TTL_SECONDS,
+  });
+}
+
+export function clearOAuthStateCookie(response: NextResponse): void {
+  response.cookies.set(OAUTH_STATE_COOKIE, "", {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+}
+
+export function setPanelSessionCookie(response: NextResponse, sessionToken: string): void {
+  response.cookies.set(PANEL_SESSION_COOKIE, sessionToken, {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: "lax",
+    path: "/",
+    maxAge: PANEL_SESSION_TTL_SECONDS,
+  });
+}
+
+export function clearPanelSessionCookie(response: NextResponse): void {
+  response.cookies.set(PANEL_SESSION_COOKIE, "", {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
 }
 
 export function buildDiscordAvatarUrl(

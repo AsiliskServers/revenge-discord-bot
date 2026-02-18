@@ -139,6 +139,22 @@ function saveTicketStore() {
   writeJsonFile(TICKETS_STATE_FILE, Array.from(ticketStore.values()));
 }
 
+function readHubState() {
+  const state = readJsonFile(HUB_STATE_FILE, null);
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+  return state?.guildId && state?.channelId && state?.messageId ? state : null;
+}
+
+function writeHubState(message) {
+  writeJsonFile(HUB_STATE_FILE, {
+    guildId: message.guild.id,
+    channelId: message.channelId,
+    messageId: message.id,
+  });
+}
+
 function loadTicketMeta(maxTicketNumberFromStore) {
   const raw = readJsonFile(TICKETS_META_FILE, { totalCreated: 0 });
   const parsed = Number(raw?.totalCreated || 0);
@@ -569,7 +585,7 @@ async function ensureHubMessage(client) {
   }
 
   const payload = buildHubPayload();
-  const state = readJsonFile(HUB_STATE_FILE, null);
+  const state = readHubState();
 
   if (
     state &&
@@ -587,20 +603,12 @@ async function ensureHubMessage(client) {
   const existing = await findExistingHubMessage(channel, client.user.id);
   if (existing) {
     await existing.edit(payload).catch(() => null);
-    writeJsonFile(HUB_STATE_FILE, {
-      guildId: channel.guild.id,
-      channelId: channel.id,
-      messageId: existing.id,
-    });
+    writeHubState(existing);
     return existing;
   }
 
   const sent = await channel.send(payload);
-  writeJsonFile(HUB_STATE_FILE, {
-    guildId: channel.guild.id,
-    channelId: channel.id,
-    messageId: sent.id,
-  });
+  writeHubState(sent);
   return sent;
 }
 
@@ -659,6 +667,13 @@ function getReasonData(value) {
     return reason;
   }
   return reasonByValue.get("autres");
+}
+
+async function followUpTicketAction(interaction, content) {
+  await interaction.followUp({
+    content,
+    allowedMentions: { users: [interaction.user.id], parse: [] },
+  });
 }
 
 function canUseSupportSelectInChannel(interaction) {
@@ -783,10 +798,7 @@ async function handleClaim(interaction, ticket) {
   await interaction.deferUpdate();
   await updateTicketPanelMessage(interaction.client, ticket);
 
-  await interaction.followUp({
-    content: `Ticket claim par <@${interaction.user.id}>.`,
-    allowedMentions: { users: [interaction.user.id], parse: [] },
-  });
+  await followUpTicketAction(interaction, `Ticket claim par <@${interaction.user.id}>.`);
 }
 
 async function handleClose(interaction, ticket) {
@@ -817,10 +829,7 @@ async function handleClose(interaction, ticket) {
   await interaction.deferUpdate();
   await updateTicketPanelMessage(interaction.client, ticket);
 
-  await interaction.followUp({
-    content: `Ticket fermé par <@${interaction.user.id}>.`,
-    allowedMentions: { users: [interaction.user.id], parse: [] },
-  });
+  await followUpTicketAction(interaction, `Ticket fermé par <@${interaction.user.id}>.`);
 }
 
 async function handleDelete(interaction, ticket) {
