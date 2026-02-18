@@ -1,6 +1,28 @@
 ﻿const fs = require("node:fs");
 const path = require("node:path");
-require("dotenv").config();
+const dotenv = require("dotenv");
+dotenv.config();
+
+function loadPanelEnvFallback() {
+  const panelEnvPath = path.join(__dirname, "features", "panel-web-gestion", ".env");
+  if (!fs.existsSync(panelEnvPath)) {
+    return;
+  }
+
+  try {
+    const parsed = dotenv.parse(fs.readFileSync(panelEnvPath));
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  } catch (error) {
+    console.error(`[CONFIG] Impossible de charger ${panelEnvPath}`);
+    console.error(error);
+  }
+}
+
+loadPanelEnvFallback();
 const {
   Client,
   Collection,

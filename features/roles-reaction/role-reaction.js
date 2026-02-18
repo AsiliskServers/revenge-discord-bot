@@ -108,8 +108,8 @@ function configRoleByCustomId(config) {
   );
 }
 
-function buildEmbed() {
-  return new EmbedBuilder()
+function buildEmbed(config) {
+  const embed = new EmbedBuilder()
     .setColor(0xe11d48)
     .setTitle("__**❓**__ㆍ__**À QUOI ÇA SERT ?**__")
     .setDescription(
@@ -121,14 +121,24 @@ function buildEmbed() {
         "**👍 Gestion simplifiée**\n" +
         "> *Évite aux administrateurs de devoir attribuer manuellement les rôles à chaque membre.*"
     );
+
+  if (!config.enabled) {
+    embed.setFooter({
+      text: "Fonctionnalité temporairement désactivée. Contactez un administrateur.",
+    });
+  }
+
+  return embed;
 }
 
 function buildComponents(config) {
+  const disableButtons = !config.enabled;
   const buttons = (config.roles || []).map((item) =>
     new ButtonBuilder()
       .setCustomId(`${BUTTON_PREFIX}${item.key}`)
       .setStyle(ButtonStyle.Secondary)
       .setLabel(item.label)
+      .setDisabled(disableButtons)
   );
 
   return chunk(buttons, 5).map((rowButtons) =>
@@ -138,7 +148,7 @@ function buildComponents(config) {
 
 function buildPayload(config) {
   return {
-    embeds: [buildEmbed()],
+    embeds: [buildEmbed(config)],
     components: buildComponents(config),
     allowedMentions: { parse: [] },
   };
@@ -256,13 +266,6 @@ async function findExistingMessage(channel, botId) {
 }
 
 async function ensureRoleReactionMessage(client, guild, config) {
-  if (!config.enabled) {
-    const previousState = readMessageState();
-    await deleteTrackedMessage(client, previousState).catch(() => null);
-    writeMessageState(null);
-    return;
-  }
-
   const channel = await fetchGuildTextChannel(guild, config.channelId);
   if (!channel || channel.type !== ChannelType.GuildText) {
     console.error(
