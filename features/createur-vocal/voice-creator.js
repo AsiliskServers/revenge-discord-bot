@@ -81,6 +81,10 @@ function asString(value, fallback = "") {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
+function asStringRaw(value, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
 function asNumber(value, fallback) {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -96,7 +100,17 @@ function clampInt(value, min, max, fallback) {
 
 function normalizeConfig(rawEnabled, rawConfig) {
   const source = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
-  const prefix = asString(source.tempVoiceNamePrefix, DEFAULT_CONFIG.tempVoiceNamePrefix);
+  const rawPrefix = asStringRaw(
+    source.tempVoiceNamePrefix,
+    DEFAULT_CONFIG.tempVoiceNamePrefix
+  );
+  const trimmedPrefix = rawPrefix.trim();
+  const prefixWithSpace =
+    trimmedPrefix.length === 0
+      ? DEFAULT_CONFIG.tempVoiceNamePrefix
+      : /\s$/.test(trimmedPrefix)
+        ? trimmedPrefix
+        : `${trimmedPrefix} `;
 
   return {
     enabled: typeof rawEnabled === "boolean" ? rawEnabled : true,
@@ -108,8 +122,7 @@ function normalizeConfig(rawEnabled, rawConfig) {
       120000,
       DEFAULT_CONFIG.emptyDeleteDelayMs
     ),
-    tempVoiceNamePrefix:
-      prefix.length > 0 ? prefix.slice(0, 60) : DEFAULT_CONFIG.tempVoiceNamePrefix,
+    tempVoiceNamePrefix: prefixWithSpace.slice(0, 60),
   };
 }
 

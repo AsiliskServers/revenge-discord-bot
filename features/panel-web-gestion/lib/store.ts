@@ -15,6 +15,10 @@ function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
+function asStringRaw(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 function normalizeEnabled(value: unknown, fallback = true): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
@@ -57,10 +61,18 @@ export function normalizeVoiceCreatorConfig(input: unknown): VoiceCreatorFeature
     ? Math.max(1000, Math.min(120_000, Math.floor(delayValue)))
     : DEFAULT_VOICE_CREATOR_CONFIG.emptyDeleteDelayMs;
 
-  const tempVoiceNamePrefix = asString(
+  const rawPrefix = asStringRaw(
     source.tempVoiceNamePrefix,
     DEFAULT_VOICE_CREATOR_CONFIG.tempVoiceNamePrefix
   );
+  const trimmedPrefix = rawPrefix.trim();
+  const tempVoiceNamePrefix = trimmedPrefix.length > 0 ? trimmedPrefix : "";
+  const prefixWithSpace =
+    tempVoiceNamePrefix.length === 0
+      ? DEFAULT_VOICE_CREATOR_CONFIG.tempVoiceNamePrefix
+      : /\s$/.test(tempVoiceNamePrefix)
+        ? tempVoiceNamePrefix
+        : `${tempVoiceNamePrefix} `;
 
   return {
     creatorChannelId: asString(
@@ -72,10 +84,7 @@ export function normalizeVoiceCreatorConfig(input: unknown): VoiceCreatorFeature
       DEFAULT_VOICE_CREATOR_CONFIG.targetCategoryId
     ),
     emptyDeleteDelayMs,
-    tempVoiceNamePrefix:
-      tempVoiceNamePrefix.length > 0
-        ? tempVoiceNamePrefix.slice(0, 60)
-        : DEFAULT_VOICE_CREATOR_CONFIG.tempVoiceNamePrefix,
+    tempVoiceNamePrefix: prefixWithSpace.slice(0, 60),
   };
 }
 
