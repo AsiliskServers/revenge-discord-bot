@@ -14,6 +14,8 @@ type ApiRecord = {
 type GuildMeta = {
   channels: Array<{ id: string; name: string }>;
   roles: Array<{ id: string; name: string }>;
+  voiceChannels: Array<{ id: string; name: string }>;
+  categoryChannels: Array<{ id: string; name: string }>;
   warning?: string;
 };
 
@@ -43,6 +45,8 @@ export default function RolesReactionCard({ guildId }: Props) {
   const [guildMeta, setGuildMeta] = useState<GuildMeta>({
     channels: [],
     roles: [],
+    voiceChannels: [],
+    categoryChannels: [],
   });
   const [metaWarning, setMetaWarning] = useState<string | null>(null);
 
@@ -68,7 +72,12 @@ export default function RolesReactionCard({ guildId }: Props) {
     }
     return {
       record: payload.data as ApiRecord,
-      meta: payload.meta || { channels: [], roles: [] },
+      meta: payload.meta || {
+        channels: [],
+        roles: [],
+        voiceChannels: [],
+        categoryChannels: [],
+      },
     };
   }
 

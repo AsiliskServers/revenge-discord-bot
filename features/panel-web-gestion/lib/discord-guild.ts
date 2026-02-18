@@ -25,6 +25,8 @@ export type GuildMetaChannel = {
 export type GuildMetaResult = {
   roles: GuildMetaRole[];
   channels: GuildMetaChannel[];
+  voiceChannels: GuildMetaChannel[];
+  categoryChannels: GuildMetaChannel[];
   warning?: string;
 };
 
@@ -71,11 +73,23 @@ export async function fetchGuildMeta(guildId: string): Promise<GuildMetaResult> 
       .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
       .map((channel) => ({ id: channel.id, name: channel.name }));
 
-    return { roles, channels };
+    const voiceChannels = channelsRaw
+      .filter((channel) => channel.type === 2 || channel.type === 13)
+      .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+      .map((channel) => ({ id: channel.id, name: channel.name }));
+
+    const categoryChannels = channelsRaw
+      .filter((channel) => channel.type === 4)
+      .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+      .map((channel) => ({ id: channel.id, name: channel.name }));
+
+    return { roles, channels, voiceChannels, categoryChannels };
   } catch (error) {
     return {
       roles: [],
       channels: [],
+      voiceChannels: [],
+      categoryChannels: [],
       warning: `Impossible de charger les rôles/salons Discord: ${String(error)}`,
     };
   }

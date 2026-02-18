@@ -1,15 +1,22 @@
-﻿import { PoolClient } from "pg";
+import { PoolClient } from "pg";
 import { ensurePanelSchema, getPool } from "@/lib/db";
 import {
   DEFAULT_ROLE_REACTION_CONFIG,
+  DEFAULT_VOICE_CREATOR_CONFIG,
   FEATURE_KEY_ROLES_REACTION,
+  FEATURE_KEY_VOICE_CREATOR,
   FeatureRecord,
   RoleReactionEntry,
   RoleReactionFeatureConfig,
+  VoiceCreatorFeatureConfig,
 } from "@/lib/types";
 
 function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value.trim() : fallback;
+}
+
+function normalizeEnabled(value: unknown, fallback = true): boolean {
+  return typeof value === "boolean" ? value : fallback;
 }
 
 function sanitizeRoleEntry(input: unknown, index: number): RoleReactionEntry {
@@ -40,14 +47,47 @@ export function normalizeRoleReactionConfig(input: unknown): RoleReactionFeature
   };
 }
 
-function normalizeEnabled(value: unknown, fallback = true): boolean {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  return fallback;
+export function normalizeVoiceCreatorConfig(input: unknown): VoiceCreatorFeatureConfig {
+  const source = (input || {}) as Partial<VoiceCreatorFeatureConfig>;
+  const delayValue =
+    typeof source.emptyDeleteDelayMs === "number"
+      ? source.emptyDeleteDelayMs
+      : Number(source.emptyDeleteDelayMs);
+  const emptyDeleteDelayMs = Number.isFinite(delayValue)
+    ? Math.max(1000, Math.min(120_000, Math.floor(delayValue)))
+    : DEFAULT_VOICE_CREATOR_CONFIG.emptyDeleteDelayMs;
+
+  const tempVoiceNamePrefix = asString(
+    source.tempVoiceNamePrefix,
+    DEFAULT_VOICE_CREATOR_CONFIG.tempVoiceNamePrefix
+  );
+
+  return {
+    creatorChannelId: asString(
+      source.creatorChannelId,
+      DEFAULT_VOICE_CREATOR_CONFIG.creatorChannelId
+    ),
+    targetCategoryId: asString(
+      source.targetCategoryId,
+      DEFAULT_VOICE_CREATOR_CONFIG.targetCategoryId
+    ),
+    emptyDeleteDelayMs,
+    tempVoiceNamePrefix:
+      tempVoiceNamePrefix.length > 0
+        ? tempVoiceNamePrefix.slice(0, 60)
+        : DEFAULT_VOICE_CREATOR_CONFIG.tempVoiceNamePrefix,
+  };
 }
 
-export async function getRolesReactionRecord(guildId: string): Promise<FeatureRecord<RoleReactionFeatureConfig>> {
+async function getFeatureRecord<TConfig>({
+  guildId,
+  featureKey,
+  normalizeConfig,
+}: {
+  guildId: string;
+  featureKey: string;
+  normalizeConfig: (value: unknown) => TConfig;
+}): Promise<FeatureRecord<TConfig>> {
   await ensurePanelSchema();
 
   const result = await getPool().query(
@@ -57,39 +97,38 @@ export async function getRolesReactionRecord(guildId: string): Promise<FeatureRe
       WHERE guild_id = $1 AND feature_key = $2
       LIMIT 1
     `,
-    [guildId, FEATURE_KEY_ROLES_REACTION]
+    [guildId, featureKey]
   );
 
   const row = result.rows[0];
-  const enabled = normalizeEnabled(row?.enabled, true);
-  const config = normalizeRoleReactionConfig(row?.config_json);
-  const updatedAt = row?.updated_at
-    ? new Date(row.updated_at).toISOString()
-    : new Date().toISOString();
-
   return {
     guildId,
-    featureKey: FEATURE_KEY_ROLES_REACTION,
-    enabled,
-    config,
-    updatedAt,
+    featureKey,
+    enabled: normalizeEnabled(row?.enabled, true),
+    config: normalizeConfig(row?.config_json),
+    updatedAt: row?.updated_at
+      ? new Date(row.updated_at).toISOString()
+      : new Date().toISOString(),
   };
 }
 
-export async function saveRolesReactionRecord({
+async function saveFeatureRecord<TConfig>({
   guildId,
+  featureKey,
   enabled,
   config,
   updatedBy,
+  normalizeConfig,
 }: {
   guildId: string;
+  featureKey: string;
   enabled: boolean;
-  config: RoleReactionFeatureConfig;
+  config: TConfig;
   updatedBy: string;
-}): Promise<FeatureRecord<RoleReactionFeatureConfig>> {
+  normalizeConfig: (value: unknown) => TConfig;
+}): Promise<FeatureRecord<TConfig>> {
   await ensurePanelSchema();
-
-  const normalizedConfig = normalizeRoleReactionConfig(config);
+  const normalizedConfig = normalizeConfig(config);
 
   const result = await getPool().query(
     `
@@ -103,17 +142,79 @@ export async function saveRolesReactionRecord({
         updated_at = NOW()
       RETURNING enabled, config_json, updated_at
     `,
-    [guildId, FEATURE_KEY_ROLES_REACTION, enabled, JSON.stringify(normalizedConfig), updatedBy]
+    [guildId, featureKey, enabled, JSON.stringify(normalizedConfig), updatedBy]
   );
 
   const row = result.rows[0];
   return {
     guildId,
-    featureKey: FEATURE_KEY_ROLES_REACTION,
+    featureKey,
     enabled: normalizeEnabled(row?.enabled, true),
-    config: normalizeRoleReactionConfig(row?.config_json),
+    config: normalizeConfig(row?.config_json),
     updatedAt: new Date(row?.updated_at || Date.now()).toISOString(),
   };
+}
+
+export async function getRolesReactionRecord(
+  guildId: string
+): Promise<FeatureRecord<RoleReactionFeatureConfig>> {
+  return getFeatureRecord({
+    guildId,
+    featureKey: FEATURE_KEY_ROLES_REACTION,
+    normalizeConfig: normalizeRoleReactionConfig,
+  });
+}
+
+export async function saveRolesReactionRecord({
+  guildId,
+  enabled,
+  config,
+  updatedBy,
+}: {
+  guildId: string;
+  enabled: boolean;
+  config: RoleReactionFeatureConfig;
+  updatedBy: string;
+}): Promise<FeatureRecord<RoleReactionFeatureConfig>> {
+  return saveFeatureRecord({
+    guildId,
+    featureKey: FEATURE_KEY_ROLES_REACTION,
+    enabled,
+    config,
+    updatedBy,
+    normalizeConfig: normalizeRoleReactionConfig,
+  });
+}
+
+export async function getVoiceCreatorRecord(
+  guildId: string
+): Promise<FeatureRecord<VoiceCreatorFeatureConfig>> {
+  return getFeatureRecord({
+    guildId,
+    featureKey: FEATURE_KEY_VOICE_CREATOR,
+    normalizeConfig: normalizeVoiceCreatorConfig,
+  });
+}
+
+export async function saveVoiceCreatorRecord({
+  guildId,
+  enabled,
+  config,
+  updatedBy,
+}: {
+  guildId: string;
+  enabled: boolean;
+  config: VoiceCreatorFeatureConfig;
+  updatedBy: string;
+}): Promise<FeatureRecord<VoiceCreatorFeatureConfig>> {
+  return saveFeatureRecord({
+    guildId,
+    featureKey: FEATURE_KEY_VOICE_CREATOR,
+    enabled,
+    config,
+    updatedBy,
+    normalizeConfig: normalizeVoiceCreatorConfig,
+  });
 }
 
 export async function withPgConnection<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
