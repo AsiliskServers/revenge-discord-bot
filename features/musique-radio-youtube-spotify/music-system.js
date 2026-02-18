@@ -48,6 +48,9 @@ const MUSIC_CACHE_DIR = path.join(__dirname, ".cache", "downloads");
 const MUSIC_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MUSIC_CACHE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const MIN_VALID_AUDIO_BYTES = 1024;
+const YTDLP_COOKIES_PATH = process.env.YTDLP_COOKIES_PATH
+  ? path.resolve(process.cwd(), process.env.YTDLP_COOKIES_PATH)
+  : "";
 
 const CONTROL_HANDLERS = [
   previousControl,
@@ -315,31 +318,55 @@ async function downloadTrackToCache(track) {
 
   const ytDlp = await ensureYtDlpWrap();
   const outputTemplate = path.join(MUSIC_CACHE_DIR, `${cacheKey}.%(ext)s`);
+  const cookieArgs =
+    YTDLP_COOKIES_PATH && fs.existsSync(YTDLP_COOKIES_PATH)
+      ? ["--cookies", YTDLP_COOKIES_PATH]
+      : [];
   const baseArgs = [
     track.url,
     "--no-playlist",
     "--quiet",
     "--no-warnings",
     "--no-progress",
+    "--force-ipv4",
+    "--geo-bypass",
+    "--extractor-retries",
+    "5",
     "--retries",
     "5",
     "--fragment-retries",
     "5",
+    "--concurrent-fragments",
+    "1",
+    "--no-continue",
+    "--no-part",
+    "--newline",
     "--print",
     "after_move:filepath",
     "-o",
     outputTemplate,
+    ...cookieArgs,
   ];
 
   const strategies = [
     [
+      "--format",
+      "bestaudio[acodec*=opus]/bestaudio[ext=m4a]/bestaudio/best",
       "--extract-audio",
       "--audio-format",
       "opus",
       "--audio-quality",
       "0",
+      "--extractor-args",
+      "youtube:player_client=web,android",
     ],
-    ["--format", "bestaudio/best"],
+    [
+      "--format",
+      "bestaudio[acodec*=opus]/bestaudio[ext=m4a]/bestaudio/best",
+      "--extractor-args",
+      "youtube:player_client=web,android",
+    ],
+    ["--format", "bestaudio/best", "--extractor-args", "youtube:player_client=web"],
   ];
 
   let lastError = null;
