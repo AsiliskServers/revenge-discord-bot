@@ -337,9 +337,10 @@ async function handleRoleButton(interaction) {
     return;
   }
 
-  const config =
-    runtime.configByGuild.get(interaction.guildId) ||
-    (await loadConfigForGuild(interaction.guildId));
+  const config = canUseDatabase()
+    ? await loadConfigForGuild(interaction.guildId)
+    : runtime.configByGuild.get(interaction.guildId) ||
+      (await loadConfigForGuild(interaction.guildId));
   runtime.configByGuild.set(interaction.guildId, config);
 
   if (!config.enabled) {
@@ -412,11 +413,29 @@ function startRedisSubscription(client) {
       if (payload?.featureKey !== FEATURE_KEY) {
         return;
       }
-      if (client.config?.guildId && payload.guildId !== client.config.guildId) {
+      const guildId = asString(payload?.guildId);
+      if (!guildId) {
+        return;
+      }
+      if (client.config?.guildId && guildId !== client.config.guildId) {
         return;
       }
 
-      await refreshGuildConfigAndMessage(client, payload.guildId);
+      if (typeof payload?.enabled === "boolean" || payload?.config) {
+        const guild = await client.guilds.fetch(guildId).catch(() => null);
+        if (!guild) {
+          return;
+        }
+        const config = normalizeConfig(payload.enabled, payload.config);
+        runtime.configByGuild.set(guildId, config);
+        console.info(
+          `[ROLE REACTION] Update Redis applique: enabled=${config.enabled} guild=${guildId}`
+        );
+        await ensureRoleReactionMessage(client, guild, config);
+        return;
+      }
+
+      await refreshGuildConfigAndMessage(client, guildId);
     } catch (error) {
       console.error("[ROLE REACTION] Redis payload invalide");
       console.error(error);
@@ -457,9 +476,28 @@ module.exports = {
         return;
       }
 
+      const hasDbUrl = Boolean(getDatabaseUrl());
+      const hasRedisUrl = Boolean(asString(process.env.PANEL_REDIS_URL));
+      console.info(
+        `[ROLE REACTION] Boot config: db_url=${hasDbUrl ? "yes" : "no"} redis_url=${
+          hasRedisUrl ? "yes" : "no"
+        }`
+      );
+
       await refreshGuildConfigAndMessage(client, client.config.guildId);
       startRedisSubscription(client);
       startDatabasePolling(client);
+
+      if (!hasDbUrl) {
+        console.warn(
+          "[ROLE REACTION] PANEL_DATABASE_URL absent: lecture DB des settings desactivee."
+        );
+      }
+      if (!hasRedisUrl) {
+        console.warn(
+          "[ROLE REACTION] PANEL_REDIS_URL absent: refresh temps reel depuis panel desactive."
+        );
+      }
 
       if (!PgPoolCtor) {
         console.warn(

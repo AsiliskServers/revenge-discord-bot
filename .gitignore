@@ -13,3 +13,5 @@ features/**/.runtime/
 features/panel-web-gestion/.next/
 features/panel-web-gestion/node_modules/
 features/panel-web-gestion/tsconfig.tsbuildinfo
+
+git update.ps1
