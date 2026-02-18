@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createOAuthState,
   getDiscordOAuthConfig,
+  getPanelPublicOrigin,
   OAUTH_STATE_COOKIE,
   OAUTH_STATE_TTL_SECONDS,
 } from "@/lib/auth";
 
 function buildLoginRedirect(request: NextRequest, error: string): NextResponse {
-  const url = new URL("/login", request.url);
+  const url = new URL("/login", getPanelPublicOrigin(request));
   url.searchParams.set("error", error);
   return NextResponse.redirect(url);
 }

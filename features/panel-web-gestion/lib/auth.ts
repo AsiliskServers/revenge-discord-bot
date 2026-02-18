@@ -24,6 +24,12 @@ export type DiscordOAuthConfig = {
   allowedRoleId: string;
 };
 
+function firstHeaderValue(value: string | null): string {
+  return (value || "")
+    .split(",")[0]
+    .trim();
+}
+
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -153,6 +159,37 @@ export function getDiscordOAuthConfig(): DiscordOAuthConfig {
     ).trim(),
     allowedRoleId: (process.env.PANEL_ALLOWED_ROLE_ID || "1473478641886298156").trim(),
   };
+}
+
+export function getPanelPublicOrigin(request?: NextRequest): string {
+  const configuredBase = process.env.PANEL_PUBLIC_BASE_URL?.trim();
+  if (configuredBase) {
+    try {
+      return new URL(configuredBase).origin;
+    } catch {
+      // Ignore invalid URL and continue with request headers fallback
+    }
+  }
+
+  if (!request) {
+    return "http://127.0.0.1:3010";
+  }
+
+  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
+  const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
+  if (forwardedHost) {
+    return `${forwardedProto || "https"}://${forwardedHost}`;
+  }
+
+  const host = firstHeaderValue(request.headers.get("host"));
+  if (host) {
+    const proto =
+      forwardedProto ||
+      (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+    return `${proto}://${host}`;
+  }
+
+  return new URL(request.url).origin;
 }
 
 export function buildDiscordAvatarUrl(

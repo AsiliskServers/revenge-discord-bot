@@ -3,6 +3,7 @@ import {
   buildDiscordAvatarUrl,
   createSessionToken,
   getDiscordOAuthConfig,
+  getPanelPublicOrigin,
   OAUTH_STATE_COOKIE,
   PANEL_SESSION_COOKIE,
   PANEL_SESSION_TTL_SECONDS,
@@ -25,7 +26,7 @@ type DiscordMemberResponse = {
 };
 
 function loginRedirect(request: NextRequest, error: string): NextResponse {
-  const url = new URL("/login", request.url);
+  const url = new URL("/login", getPanelPublicOrigin(request));
   url.searchParams.set("error", error);
   return NextResponse.redirect(url);
 }
@@ -109,7 +110,7 @@ export async function GET(request: NextRequest) {
       issuedAt: Math.floor(Date.now() / 1000),
     };
 
-    const redirectUrl = new URL("/", request.url);
+    const redirectUrl = new URL("/", getPanelPublicOrigin(request));
     const response = NextResponse.redirect(redirectUrl);
     response.cookies.set(PANEL_SESSION_COOKIE, createSessionToken(session), {
       httpOnly: true,
