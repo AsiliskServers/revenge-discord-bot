@@ -245,6 +245,10 @@ select {
   padding: 10px;
 }
 
+.role-item .field + .field {
+  margin-top: 10px;
+}
+
 .role-label {
   font-weight: 700;
   margin-bottom: 8px;
