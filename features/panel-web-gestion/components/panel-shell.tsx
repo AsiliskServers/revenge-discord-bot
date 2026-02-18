@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 
-type PanelSection = "roles-reaction" | "voice-creator";
+type PanelSection = "roles-reaction" | "voice-creator" | "poll-system";
 
 type Props = {
   active: PanelSection;
@@ -26,6 +26,12 @@ export default function PanelShell({ active, username, children }: Props) {
             href="/voice-creator"
           >
             Createur vocal
+          </Link>
+          <Link
+            className={active === "poll-system" ? "active" : ""}
+            href="/systeme-sondage"
+          >
+            Systeme sondage
           </Link>
         </nav>
       </aside>

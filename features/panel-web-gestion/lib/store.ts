@@ -1,11 +1,14 @@
 import { PoolClient } from "pg";
 import { ensurePanelSchema, getPool } from "@/lib/db";
 import {
+  DEFAULT_POLL_SYSTEM_CONFIG,
   DEFAULT_ROLE_REACTION_CONFIG,
   DEFAULT_VOICE_CREATOR_CONFIG,
+  FEATURE_KEY_POLL_SYSTEM,
   FEATURE_KEY_ROLES_REACTION,
   FEATURE_KEY_VOICE_CREATOR,
   FeatureRecord,
+  PollSystemFeatureConfig,
   RoleReactionEntry,
   RoleReactionFeatureConfig,
   VoiceCreatorFeatureConfig,
@@ -85,6 +88,23 @@ export function normalizeVoiceCreatorConfig(input: unknown): VoiceCreatorFeature
     ),
     emptyDeleteDelayMs,
     tempVoiceNamePrefix: prefixWithSpace.slice(0, 60),
+  };
+}
+
+export function normalizePollSystemConfig(input: unknown): PollSystemFeatureConfig {
+  const source = (input || {}) as Partial<PollSystemFeatureConfig>;
+  const maxRaw =
+    typeof source.maxActiveSuggestionsPerUser === "number"
+      ? source.maxActiveSuggestionsPerUser
+      : Number(source.maxActiveSuggestionsPerUser);
+
+  const maxActiveSuggestionsPerUser = Number.isFinite(maxRaw)
+    ? Math.max(1, Math.min(10, Math.floor(maxRaw)))
+    : DEFAULT_POLL_SYSTEM_CONFIG.maxActiveSuggestionsPerUser;
+
+  return {
+    channelId: asString(source.channelId, DEFAULT_POLL_SYSTEM_CONFIG.channelId),
+    maxActiveSuggestionsPerUser,
   };
 }
 
@@ -223,6 +243,37 @@ export async function saveVoiceCreatorRecord({
     config,
     updatedBy,
     normalizeConfig: normalizeVoiceCreatorConfig,
+  });
+}
+
+export async function getPollSystemRecord(
+  guildId: string
+): Promise<FeatureRecord<PollSystemFeatureConfig>> {
+  return getFeatureRecord({
+    guildId,
+    featureKey: FEATURE_KEY_POLL_SYSTEM,
+    normalizeConfig: normalizePollSystemConfig,
+  });
+}
+
+export async function savePollSystemRecord({
+  guildId,
+  enabled,
+  config,
+  updatedBy,
+}: {
+  guildId: string;
+  enabled: boolean;
+  config: PollSystemFeatureConfig;
+  updatedBy: string;
+}): Promise<FeatureRecord<PollSystemFeatureConfig>> {
+  return saveFeatureRecord({
+    guildId,
+    featureKey: FEATURE_KEY_POLL_SYSTEM,
+    enabled,
+    config,
+    updatedBy,
+    normalizeConfig: normalizePollSystemConfig,
   });
 }
 

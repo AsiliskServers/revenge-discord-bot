@@ -26,10 +26,32 @@ const {
   writeJsonFile,
 } = require("../_shared/common");
 
-const POLL_CHANNEL_ID = "1472915570935726242";
+let PgPoolCtor = null;
+let RedisCtor = null;
+
+try {
+  ({ Pool: PgPoolCtor } = require("pg"));
+} catch {
+  PgPoolCtor = null;
+}
+
+try {
+  RedisCtor = require("ioredis");
+} catch {
+  RedisCtor = null;
+}
+
+const FEATURE_KEY = "poll-system";
+const REDIS_CHANNEL = process.env.PANEL_REDIS_CHANNEL || "revenge:feature:update";
+
+const DEFAULT_CONFIG = {
+  enabled: true,
+  channelId: "1472915570935726242",
+  maxActiveSuggestionsPerUser: 2,
+};
+
 const DECISION_COMMAND_NAME = "decision-suggestion";
 const LEGACY_COMMAND_NAME = "sondage";
-const MAX_ACTIVE_SUGGESTIONS_PER_USER = 2;
 
 const CREATE_POLL_BUTTON_ID = "poll_create_thread";
 const CREATE_POLL_MODAL_ID = "poll_create_thread_modal";
@@ -45,6 +67,13 @@ const HUB_STATE_FILE = path.join(RUNTIME_DIR, "poll-hub-message.json");
 const POLLS_STATE_FILE = path.join(RUNTIME_DIR, "polls-state.json");
 
 const pollStore = new Map();
+const runtime = {
+  dbPool: null,
+  schemaReady: false,
+  redisSubscriber: null,
+  pollTimer: null,
+  configByGuild: new Map(),
+};
 
 function shortText(value, limit) {
   const text = String(value || "").trim();
@@ -59,6 +88,129 @@ function toPercent(part, total) {
     return 0;
   }
   return Math.round((part / total) * 100);
+}
+
+function asString(value, fallback = "") {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+function asInteger(value, fallback) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
+function normalizeConfig(rawEnabled, rawConfig) {
+  const source = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
+  const maxActiveSuggestionsPerUser = asInteger(
+    source.maxActiveSuggestionsPerUser,
+    DEFAULT_CONFIG.maxActiveSuggestionsPerUser
+  );
+
+  return {
+    enabled: typeof rawEnabled === "boolean" ? rawEnabled : true,
+    channelId: asString(source.channelId, DEFAULT_CONFIG.channelId),
+    maxActiveSuggestionsPerUser: Math.max(1, Math.min(10, maxActiveSuggestionsPerUser)),
+  };
+}
+
+function getGuildConfig(guildId) {
+  return runtime.configByGuild.get(String(guildId)) || DEFAULT_CONFIG;
+}
+
+function getDatabaseUrl() {
+  return asString(process.env.PANEL_DATABASE_URL);
+}
+
+function canUseDatabase() {
+  return Boolean(getDatabaseUrl() && PgPoolCtor);
+}
+
+function getDbPool() {
+  if (runtime.dbPool) {
+    return runtime.dbPool;
+  }
+  if (!canUseDatabase()) {
+    return null;
+  }
+
+  runtime.dbPool = new PgPoolCtor({
+    connectionString: getDatabaseUrl(),
+    ssl: process.env.PANEL_DATABASE_SSL === "1" ? { rejectUnauthorized: false } : undefined,
+    max: 4,
+  });
+
+  runtime.dbPool.on("error", (error) => {
+    console.error("[POLL] PostgreSQL pool error");
+    console.error(error);
+  });
+
+  return runtime.dbPool;
+}
+
+async function ensureSchema() {
+  const pool = getDbPool();
+  if (!pool || runtime.schemaReady) {
+    return;
+  }
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS panel_feature_configs (
+      guild_id TEXT NOT NULL,
+      feature_key TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_by TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (guild_id, feature_key)
+    );
+  `);
+
+  runtime.schemaReady = true;
+}
+
+async function loadConfigForGuild(guildId) {
+  const pool = getDbPool();
+  if (!pool) {
+    return DEFAULT_CONFIG;
+  }
+
+  try {
+    await ensureSchema();
+    const result = await pool.query(
+      `
+        SELECT enabled, config_json
+        FROM panel_feature_configs
+        WHERE guild_id = $1 AND feature_key = $2
+        LIMIT 1
+      `,
+      [String(guildId), FEATURE_KEY]
+    );
+
+    const row = result.rows?.[0];
+    if (!row) {
+      return DEFAULT_CONFIG;
+    }
+
+    return normalizeConfig(row.enabled, row.config_json);
+  } catch (error) {
+    console.error("[POLL] Impossible de charger la config DB, fallback default.");
+    console.error(error);
+    return DEFAULT_CONFIG;
+  }
+}
+
+async function refreshGuildConfig(client, guildId) {
+  if (!guildId) {
+    return DEFAULT_CONFIG;
+  }
+
+  const config = await loadConfigForGuild(guildId);
+  runtime.configByGuild.set(String(guildId), config);
+  await ensureHubMessage(client);
+  return config;
 }
 
 function toPollRecord(raw) {
@@ -149,7 +301,8 @@ async function getPollChannel(client) {
     return null;
   }
 
-  const channel = await fetchGuildTextChannel(guild, POLL_CHANNEL_ID);
+  const config = getGuildConfig(guild.id);
+  const channel = await fetchGuildTextChannel(guild, config.channelId);
   if (!channel || channel.type !== ChannelType.GuildText) {
     return null;
   }
@@ -157,7 +310,7 @@ async function getPollChannel(client) {
   return channel;
 }
 
-function buildHubPayload(client) {
+function buildHubPayload(client, config) {
   const botAvatarUrl =
     typeof client?.user?.displayAvatarURL === "function"
       ? client.user.displayAvatarURL()
@@ -167,8 +320,14 @@ function buildHubPayload(client) {
     .setColor(0xe11d48)
     .setDescription(
       "Pour poster une nouvelle suggestion, réagissez avec le bouton de ce message. 📥\n\n" +
-        "⚠️ Vous êtes limité à deux suggestions par personne tant que la décision de la suggestion n'est pas prise."
+        `⚠️ Vous êtes limité à ${config.maxActiveSuggestionsPerUser} suggestion(s) active(s) par personne tant que la décision n'est pas prise.`
     );
+
+  if (!config.enabled) {
+    embed.setFooter({
+      text: "Fonctionnalité temporairement désactivée. Contactez un administrateur.",
+    });
+  }
 
   if (botAvatarUrl) {
     embed.setAuthor({
@@ -187,6 +346,7 @@ function buildHubPayload(client) {
           .setCustomId(CREATE_POLL_BUTTON_ID)
           .setStyle(ButtonStyle.Danger)
           .setLabel("Créer une suggestion")
+          .setDisabled(!config.enabled)
       ),
     ],
     allowedMentions: { parse: [] },
@@ -330,12 +490,13 @@ async function findExistingHubMessage(channel, botId) {
 
 async function ensureHubMessage(client) {
   const channel = await getPollChannel(client);
+  const config = getGuildConfig(client.config?.guildId);
   if (!channel) {
-    console.error(`[POLL] Salon invalide ou introuvable (${POLL_CHANNEL_ID}).`);
+    console.error(`[POLL] Salon invalide ou introuvable (${config.channelId}).`);
     return null;
   }
 
-  const payload = buildHubPayload(client);
+  const payload = buildHubPayload(client, config);
   const state = readHubState();
 
   if (
@@ -389,18 +550,23 @@ async function bumpHubMessageToBottom(client, channel) {
     await existing.delete().catch(() => null);
   }
 
-  const sent = await targetChannel.send(buildHubPayload(client));
+  const config = getGuildConfig(targetChannel.guild.id);
+  const sent = await targetChannel.send(buildHubPayload(client, config));
   writeHubState(sent);
   return sent;
 }
 
-function canCreateSuggestionInChannel(interaction) {
+function canCreateSuggestionInChannel(interaction, config) {
+  if (!config.enabled) {
+    return "La fonctionnalité Suggestions est désactivée. Contactez un administrateur.";
+  }
+
   if (!interaction.channel || interaction.channel.type !== ChannelType.GuildText) {
     return "Salon invalide pour créer une suggestion.";
   }
 
-  if (interaction.channel.id !== POLL_CHANNEL_ID) {
-    return `Ce système fonctionne uniquement dans <#${POLL_CHANNEL_ID}>.`;
+  if (interaction.channel.id !== config.channelId) {
+    return `Ce système fonctionne uniquement dans <#${config.channelId}>.`;
   }
 
   const botMember = interaction.guild?.members?.me;
@@ -456,7 +622,8 @@ function closePoll({ poll, reason, closedById }) {
 }
 
 async function createSuggestionFromModal(interaction) {
-  const checkError = canCreateSuggestionInChannel(interaction);
+  const config = getGuildConfig(interaction.guildId);
+  const checkError = canCreateSuggestionInChannel(interaction, config);
   if (checkError) {
     await replyEphemeral(interaction, checkError);
     return;
@@ -467,11 +634,11 @@ async function createSuggestionFromModal(interaction) {
 
   if (
     countUserActiveSuggestions(interaction.guildId, interaction.user.id) >=
-    MAX_ACTIVE_SUGGESTIONS_PER_USER
+    config.maxActiveSuggestionsPerUser
   ) {
     await replyEphemeral(
       interaction,
-      `Tu as déjà ${MAX_ACTIVE_SUGGESTIONS_PER_USER} suggestion(s) active(s). ` +
+      `Tu as déjà ${config.maxActiveSuggestionsPerUser} suggestion(s) active(s). ` +
         "Attends une décision du staff sur l'une d'elles pour en créer une nouvelle."
     );
     return;
@@ -704,6 +871,83 @@ async function refreshStoredPollMessages(client) {
   }
 }
 
+function startRedisSubscription(client) {
+  const redisUrl = asString(process.env.PANEL_REDIS_URL);
+  if (!redisUrl || !RedisCtor || runtime.redisSubscriber) {
+    return;
+  }
+
+  const subscriber = new RedisCtor(redisUrl, {
+    maxRetriesPerRequest: 2,
+    enableOfflineQueue: true,
+  });
+
+  subscriber.on("error", (error) => {
+    console.error("[POLL] Redis subscriber error");
+    console.error(error.message || error);
+  });
+
+  subscriber.on("message", async (channel, message) => {
+    if (channel !== REDIS_CHANNEL) {
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(message);
+      if (payload?.featureKey !== FEATURE_KEY) {
+        return;
+      }
+
+      const guildId = asString(payload?.guildId);
+      if (!guildId) {
+        return;
+      }
+      if (client.config?.guildId && guildId !== client.config.guildId) {
+        return;
+      }
+
+      if (typeof payload?.enabled === "boolean" || payload?.config) {
+        const config = normalizeConfig(payload.enabled, payload.config);
+        runtime.configByGuild.set(guildId, config);
+        console.info(
+          `[POLL] Update Redis applique: enabled=${config.enabled} guild=${guildId}`
+        );
+        await ensureHubMessage(client);
+        return;
+      }
+
+      await refreshGuildConfig(client, guildId);
+    } catch (error) {
+      console.error("[POLL] Redis payload invalide");
+      console.error(error);
+    }
+  });
+
+  subscriber.subscribe(REDIS_CHANNEL).catch((error) => {
+    console.error("[POLL] Impossible de s'abonner au channel Redis");
+    console.error(error);
+  });
+
+  runtime.redisSubscriber = subscriber;
+}
+
+function startDatabasePolling(client) {
+  if (runtime.pollTimer || !canUseDatabase()) {
+    return;
+  }
+
+  runtime.pollTimer = setInterval(() => {
+    if (!client.config?.guildId) {
+      return;
+    }
+    void refreshGuildConfig(client, client.config.guildId);
+  }, 45_000);
+
+  if (typeof runtime.pollTimer.unref === "function") {
+    runtime.pollTimer.unref();
+  }
+}
+
 module.exports = {
   name: "feature:poll-system",
   async init(client) {
@@ -715,6 +959,14 @@ module.exports = {
         return;
       }
 
+      const hasDbUrl = Boolean(getDatabaseUrl());
+      const hasRedisUrl = Boolean(asString(process.env.PANEL_REDIS_URL));
+      console.info(
+        `[POLL] Boot config: db_url=${hasDbUrl ? "yes" : "no"} redis_url=${
+          hasRedisUrl ? "yes" : "no"
+        }`
+      );
+
       await deleteGuildCommand({
         client,
         commandName: LEGACY_COMMAND_NAME,
@@ -722,9 +974,26 @@ module.exports = {
         failLog: "Failed to remove legacy /sondage command",
       });
 
+      await refreshGuildConfig(client, client.config.guildId);
+      startRedisSubscription(client);
+      startDatabasePolling(client);
+
       await registerDecisionCommand(client);
       await ensureHubMessage(client);
       await refreshStoredPollMessages(client);
+
+      if (!hasDbUrl) {
+        console.warn("[POLL] PANEL_DATABASE_URL absent: lecture DB des settings désactivée.");
+      }
+      if (!hasRedisUrl) {
+        console.warn("[POLL] PANEL_REDIS_URL absent: refresh temps réel depuis panel désactivé.");
+      }
+      if (!PgPoolCtor) {
+        console.warn("[POLL] Module pg absent, config panel DB désactivée.");
+      }
+      if (!RedisCtor) {
+        console.warn("[POLL] Module ioredis absent, refresh Redis désactivé.");
+      }
     });
 
     client.on("interactionCreate", async (interaction) => {
@@ -737,10 +1006,19 @@ module.exports = {
       }
 
       if (interaction.isButton() && interaction.customId === CREATE_POLL_BUTTON_ID) {
-      if (interaction.channelId !== POLL_CHANNEL_ID) {
+        const config = getGuildConfig(interaction.guildId);
+        if (!config.enabled) {
           await replyEphemeral(
             interaction,
-            `Ce bouton fonctionne uniquement dans <#${POLL_CHANNEL_ID}>.`
+            "La fonctionnalité Suggestions est désactivée. Contactez un administrateur."
+          );
+          return;
+        }
+
+        if (interaction.channelId !== config.channelId) {
+          await replyEphemeral(
+            interaction,
+            `Ce bouton fonctionne uniquement dans <#${config.channelId}>.`
           );
           return;
         }

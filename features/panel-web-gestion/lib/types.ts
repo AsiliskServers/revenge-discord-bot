@@ -1,5 +1,6 @@
 ﻿export const FEATURE_KEY_ROLES_REACTION = "roles-reaction";
 export const FEATURE_KEY_VOICE_CREATOR = "voice-creator";
+export const FEATURE_KEY_POLL_SYSTEM = "poll-system";
 
 export type RoleReactionEntry = {
   key: string;
@@ -17,6 +18,11 @@ export type VoiceCreatorFeatureConfig = {
   targetCategoryId: string;
   emptyDeleteDelayMs: number;
   tempVoiceNamePrefix: string;
+};
+
+export type PollSystemFeatureConfig = {
+  channelId: string;
+  maxActiveSuggestionsPerUser: number;
 };
 
 export type FeatureRecord<TConfig> = {
@@ -42,4 +48,9 @@ export const DEFAULT_VOICE_CREATOR_CONFIG: VoiceCreatorFeatureConfig = {
   targetCategoryId: "1382993339728789595",
   emptyDeleteDelayMs: 5000,
   tempVoiceNamePrefix: "🔊・Salon de ",
+};
+
+export const DEFAULT_POLL_SYSTEM_CONFIG: PollSystemFeatureConfig = {
+  channelId: "1472915570935726242",
+  maxActiveSuggestionsPerUser: 2,
 };
