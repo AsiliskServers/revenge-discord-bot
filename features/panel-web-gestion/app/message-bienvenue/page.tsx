@@ -19,7 +19,7 @@ export default function WelcomeMessagePage() {
   }
 
   return (
-    <PanelShell active="welcome-message" username={session.username}>
+    <PanelShell active="welcome-message" username={session.username} userId={session.userId}>
       <WelcomeMessageCard guildId={resolveGuildId(session.guildId)} />
     </PanelShell>
   );

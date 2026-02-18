@@ -1,49 +1,19 @@
-﻿import Link from "next/link";
-
-type PanelSection =
-  | "roles-reaction"
-  | "voice-creator"
-  | "poll-system"
-  | "welcome-message";
+﻿import SidebarNav, { type PanelSection } from "@/components/sidebar-nav";
 
 type Props = {
   active: PanelSection;
   username: string;
+  userId: string;
   children: React.ReactNode;
 };
 
-export default function PanelShell({ active, username, children }: Props) {
+export default function PanelShell({ active, username, userId, children }: Props) {
   return (
     <main className="layout">
       <aside className="sidebar">
         <h1>Revenge Panel</h1>
         <p>panel-revenge.asilisk.fr</p>
-        <nav>
-          <Link
-            className={active === "roles-reaction" ? "active" : ""}
-            href="/roles-reaction"
-          >
-            Roles reactions
-          </Link>
-          <Link
-            className={active === "voice-creator" ? "active" : ""}
-            href="/voice-creator"
-          >
-            Createur vocal
-          </Link>
-          <Link
-            className={active === "poll-system" ? "active" : ""}
-            href="/systeme-sondage"
-          >
-            Systeme sondage
-          </Link>
-          <Link
-            className={active === "welcome-message" ? "active" : ""}
-            href="/message-bienvenue"
-          >
-            Message bienvenue
-          </Link>
-        </nav>
+        <SidebarNav active={active} userId={userId} />
       </aside>
 
       <section className="content">

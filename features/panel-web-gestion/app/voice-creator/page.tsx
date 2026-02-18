@@ -19,7 +19,7 @@ export default function VoiceCreatorPage() {
   }
 
   return (
-    <PanelShell active="voice-creator" username={session.username}>
+    <PanelShell active="voice-creator" username={session.username} userId={session.userId}>
       <VoiceCreatorCard guildId={resolveGuildId(session.guildId)} />
     </PanelShell>
   );

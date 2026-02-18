@@ -1,5 +1,5 @@
-﻿import PanelShell from "@/components/panel-shell";
-import PollSystemCard from "@/components/poll-system-card";
+﻿import EmbedAnnouncementsCard from "@/components/embed-annonces-card";
+import PanelShell from "@/components/panel-shell";
 import { getSessionFromCookieStore } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -12,15 +12,15 @@ function resolveGuildId(sessionGuildId?: string) {
   );
 }
 
-export default function PollSystemPage() {
+export default function EmbedAnnouncementsPage() {
   const session = getSessionFromCookieStore();
   if (!session) {
     redirect("/login");
   }
 
   return (
-    <PanelShell active="poll-system" username={session.username} userId={session.userId}>
-      <PollSystemCard guildId={resolveGuildId(session.guildId)} />
+    <PanelShell active="embed-annonces" username={session.username} userId={session.userId}>
+      <EmbedAnnouncementsCard guildId={resolveGuildId(session.guildId)} />
     </PanelShell>
   );
 }

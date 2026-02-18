@@ -19,7 +19,7 @@ export default function RolesReactionPage() {
   }
 
   return (
-    <PanelShell active="roles-reaction" username={session.username}>
+    <PanelShell active="roles-reaction" username={session.username} userId={session.userId}>
       <RolesReactionCard guildId={resolveGuildId(session.guildId)} />
     </PanelShell>
   );
