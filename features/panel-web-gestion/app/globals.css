@@ -145,8 +145,7 @@ a {
   margin-top: 16px;
 }
 
-.field,
-.switch-row {
+.field {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -154,7 +153,51 @@ a {
 }
 
 .switch-row {
-  justify-content: end;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #27292d;
+}
+
+.discord-switch {
+  width: 40px;
+  min-width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  padding: 2px;
+  background: #72767d;
+  display: inline-flex;
+  align-items: center;
+  transition: background-color 0.15s ease;
+}
+
+.discord-switch.on {
+  background: #23a559;
+}
+
+.discord-switch-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: translateX(0);
+  transition: transform 0.15s ease;
+}
+
+.discord-switch.on .discord-switch-knob {
+  transform: translateX(16px);
+}
+
+.discord-switch:disabled {
+  opacity: 0.7;
+  cursor: wait;
 }
 
 input {

@@ -18,6 +18,7 @@ type Props = {
 export default function RolesReactionCard({ guildId }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -71,6 +72,50 @@ export default function RolesReactionCard({ guildId }: Props) {
     );
   }
 
+  async function patchConfig(nextEnabled: boolean, nextChannelId: string, nextRoles: RoleReactionEntry[]) {
+    const response = await fetch("/api/features/roles-reaction", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        guildId,
+        enabled: nextEnabled,
+        config: {
+          channelId: nextChannelId,
+          roles: nextRoles,
+        },
+      }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error || "Échec de sauvegarde");
+    }
+  }
+
+  async function toggleEnabled() {
+    if (loading || saving || toggling) {
+      return;
+    }
+
+    const previousEnabled = enabled;
+    const nextEnabled = !previousEnabled;
+
+    setEnabled(nextEnabled);
+    setToggling(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await patchConfig(nextEnabled, channelId.trim(), roles);
+      setSuccess(nextEnabled ? "Feature activée." : "Feature désactivée.");
+    } catch (toggleError) {
+      setEnabled(previousEnabled);
+      setError(String(toggleError));
+    } finally {
+      setToggling(false);
+    }
+  }
+
   async function save() {
     if (!canSave || saving) {
       return;
@@ -81,24 +126,7 @@ export default function RolesReactionCard({ guildId }: Props) {
     setSuccess(null);
 
     try {
-      const response = await fetch("/api/features/roles-reaction", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          guildId,
-          enabled,
-          config: {
-            channelId: channelId.trim(),
-            roles,
-          },
-        }),
-      });
-
-      const payload = await response.json();
-      if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error || "Échec de sauvegarde");
-      }
-
+      await patchConfig(enabled, channelId.trim(), roles);
       setSuccess("Configuration sauvegardée et événement Redis publié.");
       await load();
     } catch (saveError) {
@@ -125,11 +153,16 @@ export default function RolesReactionCard({ guildId }: Props) {
       <div className="field-grid">
         <label className="switch-row">
           <span>Feature activée</span>
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(event) => setEnabled(event.target.checked)}
-          />
+          <button
+            type="button"
+            className={`discord-switch ${enabled ? "on" : "off"}`}
+            onClick={() => void toggleEnabled()}
+            disabled={loading || saving || toggling}
+            aria-pressed={enabled}
+            aria-label={enabled ? "Désactiver la feature" : "Activer la feature"}
+          >
+            <span className="discord-switch-knob" />
+          </button>
         </label>
 
         <label className="field">
@@ -167,7 +200,7 @@ export default function RolesReactionCard({ guildId }: Props) {
       <footer className="card-footer">
         {error ? <p className="error">{error}</p> : null}
         {success ? <p className="success">{success}</p> : null}
-        <button onClick={save} disabled={!canSave || saving || loading}>
+        <button onClick={save} disabled={!canSave || saving || toggling || loading}>
           {saving ? "Sauvegarde..." : "Sauvegarder"}
         </button>
       </footer>
