@@ -29,6 +29,7 @@ Voir `.env.example`.
 - `DISCORD_CLIENT_ID`
 - `DISCORD_CLIENT_SECRET`
 - `DISCORD_REDIRECT_URI`
+- `DISCORD_BOT_TOKEN` (requis pour lister rôles/salons dans le panel)
 
 ## Lancement local
 

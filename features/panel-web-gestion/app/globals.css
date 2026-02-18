@@ -208,6 +208,14 @@ input {
   padding: 10px;
 }
 
+select {
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
 .roles-grid {
   margin-top: 16px;
   display: grid;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
+import { fetchGuildMeta } from "@/lib/discord-guild";
 import { publishFeatureUpdate } from "@/lib/redis";
 import {
   getRolesReactionRecord,
@@ -62,8 +63,11 @@ export async function GET(request: NextRequest) {
       return context;
     }
 
-    const record = await getRolesReactionRecord(context.guildId);
-    return NextResponse.json({ ok: true, data: record });
+    const [record, meta] = await Promise.all([
+      getRolesReactionRecord(context.guildId),
+      fetchGuildMeta(context.guildId),
+    ]);
+    return NextResponse.json({ ok: true, data: record, meta });
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: "Impossible de charger la config", details: String(error) },

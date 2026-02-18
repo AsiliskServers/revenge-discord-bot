@@ -11,6 +11,19 @@ type ApiRecord = {
   updatedAt: string;
 };
 
+type GuildMeta = {
+  channels: Array<{ id: string; name: string }>;
+  roles: Array<{ id: string; name: string }>;
+  warning?: string;
+};
+
+type ApiGetPayload = {
+  ok: boolean;
+  data: ApiRecord;
+  meta?: GuildMeta;
+  error?: string;
+};
+
 type Props = {
   guildId: string;
 };
@@ -27,6 +40,11 @@ export default function RolesReactionCard({ guildId }: Props) {
   const [enabled, setEnabled] = useState(true);
   const [channelId, setChannelId] = useState("");
   const [roles, setRoles] = useState<RoleReactionEntry[]>([]);
+  const [guildMeta, setGuildMeta] = useState<GuildMeta>({
+    channels: [],
+    roles: [],
+  });
+  const [metaWarning, setMetaWarning] = useState<string | null>(null);
 
   function clearAlerts() {
     setError(null);
@@ -39,23 +57,29 @@ export default function RolesReactionCard({ guildId }: Props) {
     setRoles(data.config.roles || []);
   }
 
-  async function fetchRecord(): Promise<ApiRecord> {
+  async function fetchRecord(): Promise<{ record: ApiRecord; meta: GuildMeta }> {
     const response = await fetch(`/api/features/roles-reaction?guildId=${guildId}`, {
       method: "GET",
       cache: "no-store",
     });
-    const payload = await response.json();
+    const payload = (await response.json()) as ApiGetPayload;
     if (!response.ok || !payload?.ok) {
       throw new Error(payload?.error || "Échec de chargement");
     }
-    return payload.data as ApiRecord;
+    return {
+      record: payload.data as ApiRecord,
+      meta: payload.meta || { channels: [], roles: [] },
+    };
   }
 
   async function load() {
     setLoading(true);
     clearAlerts();
     try {
-      applyRecord(await fetchRecord());
+      const { record, meta } = await fetchRecord();
+      applyRecord(record);
+      setGuildMeta(meta);
+      setMetaWarning(meta.warning || null);
     } catch (loadError) {
       setError(String(loadError));
     } finally {
@@ -81,6 +105,30 @@ export default function RolesReactionCard({ guildId }: Props) {
     setRoles((current) =>
       current.map((item, idx) => (idx === index ? { ...item, ...patch } : item))
     );
+  }
+
+  function updateRoleId(index: number, roleId: string) {
+    const selected = guildMeta.roles.find((role) => role.id === roleId);
+    setRoles((current) =>
+      current.map((item, idx) => {
+        if (idx !== index) {
+          return item;
+        }
+        return {
+          ...item,
+          roleId,
+          label: item.label?.trim() ? item.label : selected?.name || item.label,
+        };
+      })
+    );
+  }
+
+  function getRoleOptionsWithCurrent(currentRoleId: string) {
+    const base = guildMeta.roles;
+    if (!currentRoleId || base.some((role) => role.id === currentRoleId)) {
+      return base;
+    }
+    return [{ id: currentRoleId, name: `Rôle actuel (${currentRoleId})` }, ...base];
   }
 
   async function patchConfig(
@@ -193,31 +241,61 @@ export default function RolesReactionCard({ guildId }: Props) {
         </label>
 
         <label className="field">
-          <span>Guild ID</span>
-          <input type="text" value={guildId} disabled />
-        </label>
-
-        <label className="field">
-          <span>Channel ID cible</span>
-          <input
-            type="text"
-            value={channelId}
-            onChange={(event) => setChannelId(event.target.value)}
-            placeholder="1470813116395946229"
-          />
+          <span>Salon cible</span>
+          {guildMeta.channels.length > 0 ? (
+            <select value={channelId} onChange={(event) => setChannelId(event.target.value)}>
+              <option value="">Sélectionner un salon</option>
+              {guildMeta.channels.map((channel) => (
+                <option key={channel.id} value={channel.id}>
+                  #{channel.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={channelId}
+              onChange={(event) => setChannelId(event.target.value)}
+              placeholder="ID salon (fallback)"
+            />
+          )}
         </label>
       </div>
+
+      {metaWarning ? <p className="muted">{metaWarning}</p> : null}
 
       <div className="roles-grid">
         {roles.map((role, index) => (
           <article key={role.key} className="role-item">
             <div className="role-label">{role.label}</div>
             <label className="field">
-              <span>Role ID</span>
+              <span>Rôle</span>
+              {guildMeta.roles.length > 0 ? (
+                <select
+                  value={role.roleId}
+                  onChange={(event) => updateRoleId(index, event.target.value)}
+                >
+                  <option value="">Sélectionner un rôle</option>
+                  {getRoleOptionsWithCurrent(role.roleId).map((option) => (
+                    <option key={option.id} value={option.id}>
+                      @{option.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={role.roleId}
+                  onChange={(event) => updateRole(index, { roleId: event.target.value })}
+                />
+              )}
+            </label>
+            <label className="field">
+              <span>Libellé bouton</span>
               <input
                 type="text"
-                value={role.roleId}
-                onChange={(event) => updateRole(index, { roleId: event.target.value })}
+                value={role.label}
+                onChange={(event) => updateRole(index, { label: event.target.value })}
               />
             </label>
           </article>
