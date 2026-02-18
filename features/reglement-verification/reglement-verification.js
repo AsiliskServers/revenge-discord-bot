@@ -9,15 +9,17 @@ const {
   EmbedBuilder,
   MessageFlags,
   ModalBuilder,
-  PermissionFlagsBits,
   TextInputBuilder,
   TextInputStyle,
 } = require("discord.js");
 const {
   fetchConfiguredGuild,
   fetchGuildTextChannel,
+  findBotMessageByComponent,
   hasConfiguredGuildId,
   readJsonFile,
+  replyEphemeral,
+  resolveManageableRole,
   writeJsonFile,
 } = require("../_shared/common");
 
@@ -195,22 +197,10 @@ function cleanupExpiredCaptchaSessions() {
 }
 
 async function findExistingRulesMessage(channel, botId) {
-  const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
-  if (!messages) {
-    return null;
-  }
-
-  return (
-    messages.find((message) => {
-      if (message.author?.id !== botId) {
-        return false;
-      }
-
-      return message.components.some((row) =>
-        row.components.some((component) => component.customId === ACCEPT_BUTTON_ID)
-      );
-    }) || null
-  );
+  return findBotMessageByComponent(channel, botId, {
+    exactId: ACCEPT_BUTTON_ID,
+    limit: 50,
+  });
 }
 
 async function ensureRulesMessage(client) {
@@ -263,59 +253,41 @@ async function assignVerifiedRole(member) {
     return { ok: true, already: true };
   }
 
-  const role =
-    member.guild.roles.cache.get(VERIFIED_ROLE_ID) ||
-    (await member.guild.roles.fetch(VERIFIED_ROLE_ID).catch(() => null));
-
-  if (!role) {
-    return { ok: false, reason: "Rôle de vérification introuvable." };
+  const resolvedRole = await resolveManageableRole(member.guild, VERIFIED_ROLE_ID);
+  if (!resolvedRole.ok) {
+    switch (resolvedRole.code) {
+      case "ROLE_NOT_FOUND":
+        return { ok: false, reason: "Rôle de vérification introuvable." };
+      case "BOT_MEMBER_NOT_FOUND":
+        return { ok: false, reason: "Membre bot introuvable." };
+      case "MISSING_MANAGE_ROLES":
+        return { ok: false, reason: "Permission manquante: ManageRoles." };
+      default:
+        return {
+          ok: false,
+          reason: "Le rôle du bot doit être au-dessus du rôle de vérification.",
+        };
+    }
   }
 
-  const botMember =
-    member.guild.members.me || (await member.guild.members.fetchMe().catch(() => null));
-
-  if (!botMember) {
-    return { ok: false, reason: "Membre bot introuvable." };
-  }
-
-  if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
-    return { ok: false, reason: "Permission manquante: ManageRoles." };
-  }
-
-  if (botMember.roles.highest.comparePositionTo(role) <= 0) {
-    return {
-      ok: false,
-      reason: "Le rôle du bot doit être au-dessus du rôle de vérification.",
-    };
-  }
-
-  await member.roles.add(role, "Vérification règlement captcha");
+  await member.roles.add(resolvedRole.role, "Vérification règlement captcha");
   return { ok: true, already: false };
 }
 
 async function handleAcceptButton(interaction, client) {
   if (interaction.guildId !== client.config?.guildId) {
-    await interaction.reply({
-      content: "Interaction non autorisée sur ce serveur.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Interaction non autorisée sur ce serveur.");
     return;
   }
 
   const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
   if (!member) {
-    await interaction.reply({
-      content: "Impossible de récupérer ton profil serveur.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Impossible de récupérer ton profil serveur.");
     return;
   }
 
   if (member.roles.cache.has(VERIFIED_ROLE_ID)) {
-    await interaction.reply({
-      content: "Tu es déjà vérifié.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Tu es déjà vérifié.");
     return;
   }
 
@@ -352,18 +324,12 @@ async function handleSolveButton(interaction) {
   const session = getCaptchaSession(token);
 
   if (!session) {
-    await interaction.reply({
-      content: "Captcha expiré. Clique à nouveau sur ACCEPTER.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Captcha expiré. Clique à nouveau sur ACCEPTER.");
     return;
   }
 
   if (session.userId !== interaction.user.id) {
-    await interaction.reply({
-      content: "Ce captcha ne t'appartient pas.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Ce captcha ne t'appartient pas.");
     return;
   }
 
@@ -393,28 +359,19 @@ async function handleCaptchaModal(interaction) {
   const session = getCaptchaSession(token);
 
   if (!session) {
-    await interaction.reply({
-      content: "Captcha expiré. Clique à nouveau sur ACCEPTER.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Captcha expiré. Clique à nouveau sur ACCEPTER.");
     return;
   }
 
   if (session.userId !== interaction.user.id || session.guildId !== interaction.guildId) {
-    await interaction.reply({
-      content: "Ce captcha ne t'appartient pas.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Ce captcha ne t'appartient pas.");
     return;
   }
 
   const value = interaction.fields.getTextInputValue(CAPTCHA_INPUT_ID).trim().toUpperCase();
   if (value !== session.code) {
     captchaSessions.delete(token);
-    await interaction.reply({
-      content: "Captcha invalide. Reclique sur ACCEPTER pour recommencer.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Captcha invalide. Reclique sur ACCEPTER pour recommencer.");
     return;
   }
 
@@ -422,36 +379,27 @@ async function handleCaptchaModal(interaction) {
   captchaSessions.delete(token);
 
   if (!member) {
-    await interaction.reply({
-      content: "Impossible de récupérer ton profil serveur.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Impossible de récupérer ton profil serveur.");
     return;
   }
 
   try {
     const result = await assignVerifiedRole(member);
     if (!result.ok) {
-      await interaction.reply({
-        content: `Vérification échouée : ${result.reason}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, `Vérification échouée : ${result.reason}`);
       return;
     }
 
-    await interaction.reply({
-      content: result.already
+    await replyEphemeral(
+      interaction,
+      result.already
         ? "Tu es déjà vérifié."
-        : "Vérification validée. Tu as maintenant accès au serveur.",
-      flags: MessageFlags.Ephemeral,
-    });
+        : "Vérification validée. Tu as maintenant accès au serveur."
+    );
   } catch (error) {
     console.error("[RULES] Attribution rôle vérification impossible");
     console.error(error);
-    await interaction.reply({
-      content: "Une erreur est survenue. Réessaie dans un instant.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Une erreur est survenue. Réessaie dans un instant.");
   }
 }
 

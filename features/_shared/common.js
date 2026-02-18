@@ -1,5 +1,6 @@
 ﻿const fs = require("node:fs");
 const path = require("node:path");
+const { MessageFlags, PermissionFlagsBits } = require("discord.js");
 
 const PLACEHOLDER_GUILD_ID = "PASTE_YOUR_GUILD_ID_HERE";
 
@@ -30,6 +31,90 @@ async function fetchGuildTextChannel(guild, channelId) {
   }
 
   return channel;
+}
+
+async function fetchGuildRole(guild, roleId) {
+  if (!guild || !roleId) {
+    return null;
+  }
+
+  return (
+    guild.roles.cache.get(roleId) ||
+    (await guild.roles.fetch(roleId).catch(() => null))
+  );
+}
+
+async function fetchBotMember(guild) {
+  if (!guild) {
+    return null;
+  }
+
+  return guild.members.me || (await guild.members.fetchMe().catch(() => null));
+}
+
+async function resolveManageableRole(guild, roleId) {
+  const role = await fetchGuildRole(guild, roleId);
+  if (!role) {
+    return { ok: false, code: "ROLE_NOT_FOUND", role: null, botMember: null };
+  }
+
+  const botMember = await fetchBotMember(guild);
+  if (!botMember) {
+    return { ok: false, code: "BOT_MEMBER_NOT_FOUND", role, botMember: null };
+  }
+
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    return { ok: false, code: "MISSING_MANAGE_ROLES", role, botMember };
+  }
+
+  if (botMember.roles.highest.comparePositionTo(role) <= 0) {
+    return { ok: false, code: "ROLE_ABOVE_BOT", role, botMember };
+  }
+
+  return { ok: true, code: null, role, botMember };
+}
+
+async function replyEphemeral(interaction, content, extra = {}) {
+  return interaction.reply({
+    content,
+    flags: MessageFlags.Ephemeral,
+    ...extra,
+  });
+}
+
+async function findBotMessageByComponent(channel, botId, {
+  exactId,
+  startsWith,
+  limit = 75,
+}) {
+  if (!channel || !botId || (!exactId && !startsWith)) {
+    return null;
+  }
+
+  const messages = await channel.messages.fetch({ limit }).catch(() => null);
+  if (!messages) {
+    return null;
+  }
+
+  return (
+    messages.find((message) => {
+      if (message.author?.id !== botId) {
+        return false;
+      }
+
+      return message.components.some((row) =>
+        row.components.some((component) => {
+          if (typeof component.customId !== "string") {
+            return false;
+          }
+          if (exactId) {
+            return component.customId === exactId;
+          }
+          return component.customId.startsWith(startsWith);
+        })
+      );
+    }) || null
+  );
 }
 
 function readJsonFile(filePath, fallbackValue) {
@@ -127,11 +212,16 @@ async function fetchTextMessage(client, channelId, messageId) {
 
 module.exports = {
   deleteGuildCommand,
+  fetchBotMember,
   fetchConfiguredGuild,
+  fetchGuildRole,
   fetchGuildTextChannel,
   fetchTextMessage,
+  findBotMessageByComponent,
   hasConfiguredGuildId,
   readJsonFile,
+  replyEphemeral,
+  resolveManageableRole,
   upsertGuildCommand,
   writeJsonFile,
 };

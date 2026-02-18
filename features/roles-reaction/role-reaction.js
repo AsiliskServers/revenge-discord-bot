@@ -5,14 +5,15 @@ const {
   ButtonStyle,
   ChannelType,
   EmbedBuilder,
-  MessageFlags,
-  PermissionFlagsBits,
 } = require("discord.js");
 const {
   fetchConfiguredGuild,
   fetchGuildTextChannel,
+  findBotMessageByComponent,
   hasConfiguredGuildId,
   readJsonFile,
+  replyEphemeral,
+  resolveManageableRole,
   writeJsonFile,
 } = require("../_shared/common");
 
@@ -20,10 +21,10 @@ const TARGET_CHANNEL_ID = "1470813116395946229";
 const BUTTON_PREFIX = "role_reaction:";
 
 const ROLE_OPTIONS = [
-  { key: "giveaways", label: "🎁Giveaways", roleId: "1379156738346848297" },
-  { key: "annonces", label: "📢Annonces", roleId: "1472050708474761502" },
-  { key: "sondages", label: "📊Sondages", roleId: "1472050709158432862" },
-  { key: "events", label: "🎉Événements", roleId: "1472050710186033254" },
+  { key: "giveaways", label: "🎁┃Giveaways", roleId: "1379156738346848297" },
+  { key: "annonces", label: "📢┃Annonces", roleId: "1472050708474761502" },
+  { key: "sondages", label: "📊┃Sondages", roleId: "1472050709158432862" },
+  { key: "events", label: "🎉┃Événements", roleId: "1472050710186033254" },
 ];
 
 const ROLE_BY_KEY = new Map(ROLE_OPTIONS.map((item) => [item.key, item]));
@@ -66,26 +67,10 @@ function buildPayload() {
 }
 
 async function findExistingMessage(channel, botId) {
-  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
-  if (!messages) {
-    return null;
-  }
-
-  return (
-    messages.find((message) => {
-      if (message.author?.id !== botId) {
-        return false;
-      }
-
-      return message.components.some((row) =>
-        row.components.some(
-          (component) =>
-            typeof component.customId === "string" &&
-            component.customId.startsWith(BUTTON_PREFIX)
-        )
-      );
-    }) || null
-  );
+  return findBotMessageByComponent(channel, botId, {
+    startsWith: BUTTON_PREFIX,
+    limit: 100,
+  });
 }
 
 async function ensureRoleReactionMessage(client) {
@@ -143,74 +128,38 @@ async function handleRoleButton(interaction) {
   }
 
   if (!interaction.inGuild()) {
-    await interaction.reply({
-      content: "Cette action est disponible uniquement sur le serveur.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Cette action est disponible uniquement sur le serveur.");
     return;
   }
 
   const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
   if (!member) {
-    await interaction.reply({
-      content: "Impossible de récupérer ton profil serveur.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(interaction, "Impossible de récupérer ton profil serveur.");
     return;
   }
 
-  const role =
-    interaction.guild.roles.cache.get(roleOption.roleId) ||
-    (await interaction.guild.roles.fetch(roleOption.roleId).catch(() => null));
-  if (!role) {
-    await interaction.reply({
-      content: "Rôle introuvable. Contacte un administrateur.",
-      flags: MessageFlags.Ephemeral,
-    });
+  const resolvedRole = await resolveManageableRole(interaction.guild, roleOption.roleId);
+  if (!resolvedRole.ok) {
+    const content =
+      resolvedRole.code === "ROLE_NOT_FOUND"
+        ? "Rôle introuvable. Contacte un administrateur."
+        : resolvedRole.code === "BOT_MEMBER_NOT_FOUND"
+          ? "Membre bot introuvable."
+          : resolvedRole.code === "MISSING_MANAGE_ROLES"
+            ? "Permission bot manquante : ManageRoles."
+            : "Le rôle du bot doit être au-dessus du rôle ciblé.";
+    await replyEphemeral(interaction, content);
     return;
   }
 
-  const botMember =
-    interaction.guild.members.me ||
-    (await interaction.guild.members.fetchMe().catch(() => null));
-  if (!botMember) {
-    await interaction.reply({
-      content: "Membre bot introuvable.",
-      flags: MessageFlags.Ephemeral,
-    });
+  if (member.roles.cache.has(resolvedRole.role.id)) {
+    await member.roles.remove(resolvedRole.role, "Rôle réaction retiré par bouton");
+    await replyEphemeral(interaction, `Rôle retiré : ${resolvedRole.role.name}`);
     return;
   }
 
-  if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
-    await interaction.reply({
-      content: "Permission bot manquante : ManageRoles.",
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  if (botMember.roles.highest.comparePositionTo(role) <= 0) {
-    await interaction.reply({
-      content: "Le rôle du bot doit être au-dessus du rôle ciblé.",
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  if (member.roles.cache.has(role.id)) {
-    await member.roles.remove(role, "Rôle réaction retiré par bouton");
-    await interaction.reply({
-      content: `Rôle retiré : ${role.name}`,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  await member.roles.add(role, "Rôle réaction ajouté par bouton");
-  await interaction.reply({
-    content: `Rôle ajouté : ${role.name}`,
-    flags: MessageFlags.Ephemeral,
-  });
+  await member.roles.add(resolvedRole.role, "Rôle réaction ajouté par bouton");
+  await replyEphemeral(interaction, `Rôle ajouté : ${resolvedRole.role.name}`);
 }
 
 module.exports = {

@@ -15,8 +15,10 @@ const {
   fetchConfiguredGuild,
   fetchGuildTextChannel,
   fetchTextMessage,
+  findBotMessageByComponent,
   hasConfiguredGuildId,
   readJsonFile,
+  replyEphemeral,
   writeJsonFile,
 } = require("../_shared/common");
 
@@ -86,14 +88,6 @@ const ticketMeta = {
 };
 let missingImageWarned = false;
 let selectedImageWarned = false;
-
-async function replyEphemeral(interaction, content, extra = {}) {
-  await interaction.reply({
-    content,
-    flags: MessageFlags.Ephemeral,
-    ...extra,
-  });
-}
 
 function resolveHubImageFile() {
   for (const candidate of HUB_IMAGE_FILES) {
@@ -561,22 +555,10 @@ async function buildTicketPermissionOverwrites(guild, ownerId) {
 }
 
 async function findExistingHubMessage(channel, botId) {
-  const messages = await channel.messages.fetch({ limit: 75 }).catch(() => null);
-  if (!messages) {
-    return null;
-  }
-
-  return (
-    messages.find((message) => {
-      if (message.author?.id !== botId) {
-        return false;
-      }
-
-      return message.components.some((row) =>
-        row.components.some((component) => component.customId === OPEN_TICKET_SELECT_ID)
-      );
-    }) || null
-  );
+  return findBotMessageByComponent(channel, botId, {
+    exactId: OPEN_TICKET_SELECT_ID,
+    limit: 75,
+  });
 }
 
 async function ensureHubMessage(client) {

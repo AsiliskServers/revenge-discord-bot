@@ -1,4 +1,4 @@
-﻿const { PermissionFlagsBits } = require("discord.js");
+const { resolveManageableRole } = require("../_shared/common");
 
 const AUTO_ROLE_ID = "997493288124813423";
 
@@ -11,40 +11,36 @@ module.exports = {
           return;
         }
 
-        const role =
-          member.guild.roles.cache.get(AUTO_ROLE_ID) ||
-          (await member.guild.roles.fetch(AUTO_ROLE_ID).catch(() => null));
-
-        if (!role) {
-          console.error(
-            `[AUTO_ROLE] Rôle introuvable (${AUTO_ROLE_ID}) sur ${member.guild.name}`
-          );
+        const resolvedRole = await resolveManageableRole(member.guild, AUTO_ROLE_ID);
+        if (!resolvedRole.ok) {
+          switch (resolvedRole.code) {
+            case "ROLE_NOT_FOUND":
+              console.error(
+                `[AUTO_ROLE] Rôle introuvable (${AUTO_ROLE_ID}) sur ${member.guild.name}`
+              );
+              break;
+            case "BOT_MEMBER_NOT_FOUND":
+              console.error(
+                `[AUTO_ROLE] Impossible de récupérer le membre bot sur ${member.guild.name}`
+              );
+              break;
+            case "MISSING_MANAGE_ROLES":
+              console.error(
+                `[AUTO_ROLE] Permission manquante: ManageRoles sur ${member.guild.name}`
+              );
+              break;
+            default:
+              console.error(
+                `[AUTO_ROLE] Le rôle du bot doit être au-dessus du rôle cible (${resolvedRole.role?.name || AUTO_ROLE_ID})`
+              );
+          }
           return;
         }
 
-        const botMember =
-          member.guild.members.me ||
-          (await member.guild.members.fetchMe().catch(() => null));
-
-        if (!botMember) {
-          console.error(`[AUTO_ROLE] Impossible de récupérer le membre bot sur ${member.guild.name}`);
-          return;
-        }
-
-        if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
-          console.error(`[AUTO_ROLE] Permission manquante: ManageRoles sur ${member.guild.name}`);
-          return;
-        }
-
-        if (botMember.roles.highest.comparePositionTo(role) <= 0) {
-          console.error(
-            `[AUTO_ROLE] Le rôle du bot doit être au-dessus du rôle cible (${role.name})`
-          );
-          return;
-        }
-
-        await member.roles.add(role, "Rôle automatique à l'arrivée");
-        console.log(`[AUTO_ROLE] Rôle ${role.name} ajouté à ${member.user.tag} (${member.id})`);
+        await member.roles.add(resolvedRole.role, "Rôle automatique à l'arrivée");
+        console.log(
+          `[AUTO_ROLE] Rôle ${resolvedRole.role.name} ajouté à ${member.user.tag} (${member.id})`
+        );
       } catch (error) {
         console.error(`[AUTO_ROLE] Échec pour ${member.user?.tag || member.id} (${member.id})`);
         console.error(error);

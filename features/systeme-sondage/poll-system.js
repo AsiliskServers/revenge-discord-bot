@@ -18,6 +18,7 @@ const {
   fetchConfiguredGuild,
   fetchGuildTextChannel,
   fetchTextMessage,
+  findBotMessageByComponent,
   hasConfiguredGuildId,
   readJsonFile,
   upsertGuildCommand,
@@ -297,22 +298,10 @@ function countUserActiveSuggestions(guildId, userId) {
 }
 
 async function findExistingHubMessage(channel, botId) {
-  const messages = await channel.messages.fetch({ limit: 75 }).catch(() => null);
-  if (!messages) {
-    return null;
-  }
-
-  return (
-    messages.find((message) => {
-      if (message.author?.id !== botId) {
-        return false;
-      }
-
-      return message.components.some((row) =>
-        row.components.some((component) => component.customId === CREATE_POLL_BUTTON_ID)
-      );
-    }) || null
-  );
+  return findBotMessageByComponent(channel, botId, {
+    exactId: CREATE_POLL_BUTTON_ID,
+    limit: 75,
+  });
 }
 
 async function ensureHubMessage(client) {
