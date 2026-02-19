@@ -1,5 +1,6 @@
 ﻿const fs = require("node:fs");
 const path = require("node:path");
+const dns = require("node:dns");
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -23,6 +24,13 @@ function loadPanelEnvFallback() {
 }
 
 loadPanelEnvFallback();
+
+try {
+  dns.setDefaultResultOrder("ipv4first");
+} catch {
+  // ignore if unsupported by current runtime
+}
+
 const {
   Client,
   Collection,
@@ -167,12 +175,37 @@ client.on("error", (error) => {
   console.error(error);
 });
 
+function isTransientNetworkError(value) {
+  const error = value && typeof value === "object" ? value : null;
+  const code = typeof error?.code === "string" ? error.code : "";
+  const message =
+    typeof error?.message === "string" ? error.message : String(value || "");
+
+  if (["EAI_AGAIN", "ENOTFOUND", "ECONNRESET", "ETIMEDOUT", "EPIPE"].includes(code)) {
+    return true;
+  }
+
+  return /getaddrinfo EAI_AGAIN|fetch failed|socket hang up/i.test(message);
+}
+
 process.on("unhandledRejection", (reason) => {
+  if (isTransientNetworkError(reason)) {
+    console.warn("[TRANSIENT NETWORK] Unhandled rejection ignoree (reseau temporaire)");
+    console.warn(reason?.message || reason);
+    return;
+  }
+
   console.error("[UNHANDLED REJECTION]");
   console.error(reason);
 });
 
 process.on("uncaughtException", (error) => {
+  if (isTransientNetworkError(error)) {
+    console.warn("[TRANSIENT NETWORK] Uncaught exception ignoree (reseau temporaire)");
+    console.warn(error?.message || error);
+    return;
+  }
+
   console.error("[UNCAUGHT EXCEPTION]");
   console.error(error);
 });
